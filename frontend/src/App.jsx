@@ -5,6 +5,9 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Makeup from './pages/Makeup'
+import Skincare from './pages/Skincare'
+import Hairdressing from './pages/Hairdressing'
 
 export default function App() {
   return (
@@ -13,6 +16,9 @@ export default function App() {
         <Route path='/' element={<Home />} />
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
+        <Route path='/makeup' element={<Makeup />} />
+        <Route path='/skincare' element={<Skincare />} />
+        <Route path='/hairdressing' element={<Hairdressing />} />
         <Route path='/dashboard' element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       </Route>
     </Routes>

@@ -17,6 +17,9 @@ export default function Navbar() {
       <Link to='/' className='font-display text-2xl'>FaceWise</Link>
       <nav className='flex flex-wrap items-center gap-6 text-sm'>
         <Link to='/' className='hover:text-rose'>Home</Link>
+        <Link to='/makeup' className='hover:text-rose'>Makeup</Link>
+        <Link to='/skincare' className='hover:text-rose'>Skincare</Link>
+        <Link to='/hairdressing' className='hover:text-rose'>Hairdressing</Link>
         {token && <Link to='/dashboard' className='hover:text-rose'>Dashboard</Link>}
       </nav>
       <div className='flex items-center gap-3'>
