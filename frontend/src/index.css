@@ -1,0 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=DM+Sans:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-plum: #2A1B3D;
+  --color-rose: #C23A61;
+  --color-lilac: #EFE9FA;
+  --color-page: #F7F5FB;
+  --font-display: 'Bricolage Grotesque', 'DM Sans', sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #F7F5FB;
+  color: #2A1B3D;
+  font-family: 'DM Sans', sans-serif;
+}
