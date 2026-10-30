@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FaceLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision'
 import { getFaceShape } from '../faceShape'
+import { suggestionsFor } from '../suggestions'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const MODEL_URL =
@@ -134,6 +135,18 @@ export default function Scan() {
       {shape && on && (
         <p className='mt-2 font-display text-2xl'>Face shape: {shape.shape} <span className='text-sm text-plum/60'>(ratio {shape.ratio})</span></p>
       )}
+      {shape && on && (
+        <section className='mt-6 rounded-3xl border border-plum/10 bg-white p-6'>
+          {[['Haircuts', 'haircuts'], ['Makeup', 'makeup'], ['Hair color', 'color']].map(([title, key]) => (
+            <div key={key} className='mt-4 first:mt-0'>
+              <h3 className='font-semibold'>{title}</h3>
+              <ul className='mt-1 list-disc pl-5 text-sm text-plum/80'>
+                {suggestionsFor(shape.shape)[key].map((t) => <li key={t}>{t}</li>)}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
       {error && <p role='alert' className='mt-4 font-semibold text-rose'>{error}</p>}
 
       <div className='mt-6 flex gap-3'>
@@ -150,6 +163,8 @@ export default function Scan() {
     </main>
   )
 }
+
+
 
 
 
