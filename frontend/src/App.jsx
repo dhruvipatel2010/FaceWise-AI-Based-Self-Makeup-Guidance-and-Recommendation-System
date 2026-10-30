@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Makeup from './pages/Makeup'
 import Skincare from './pages/Skincare'
 import Hairdressing from './pages/Hairdressing'
+import Scan from './pages/Scan'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path='/makeup' element={<Makeup />} />
         <Route path='/skincare' element={<Skincare />} />
         <Route path='/hairdressing' element={<Hairdressing />} />
+        <Route path='/scan' element={<Scan />} />
         <Route path='/dashboard' element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       </Route>
     </Routes>
