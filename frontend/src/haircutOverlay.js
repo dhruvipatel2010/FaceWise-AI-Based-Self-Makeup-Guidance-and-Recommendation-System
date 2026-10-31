@@ -1,261 +1,251 @@
 /**
- * Dynamic Haircut Virtual Try-On Canvas Overlay
- * Renders realistic hair silhouettes, textured strands, bangs, and layers
- * adapted in real-time to MediaPipe 3D face landmarks (head tilt, scale, and position).
+ * Photorealistic Haircut Virtual Try-On Engine
+ * Uses photographic hairstyle assets with dynamic landmark-anchored head tracking,
+ * real-time tilt angle rotation, scale compensation, and dynamic color tinting.
  */
 
 const px = (lm, i, w, h) => ({ x: lm[i].x * w, y: lm[i].y * h })
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
-const HAIR_PALETTES = {
-  Natural:   { base: [45, 30, 25],   highlight: [85, 60, 50],   shadow: [25, 15, 12] },
-  Chocolate: { base: [85, 48, 32],   highlight: [135, 82, 58],  shadow: [48, 25, 18] },
-  Honey:     { base: [180, 130, 65], highlight: [225, 185, 115], shadow: [120, 80, 35] },
-  Burgundy:  { base: [110, 25, 45],  highlight: [165, 48, 75],  shadow: [65, 12, 25] },
-  Copper:    { base: [170, 75, 35],  highlight: [215, 120, 65], shadow: [105, 40, 18] },
-  'Ash brown': { base: [95, 82, 75], highlight: [145, 130, 122], shadow: [55, 45, 40] },
-  Caramel:   { base: [155, 95, 50],  highlight: [205, 145, 85], shadow: [95, 55, 28] },
+const HAIR_COLORS_RGB = {
+  Natural: null,
+  Chocolate: [107, 65, 48],
+  Honey: [184, 134, 63],
+  Burgundy: [110, 28, 48],
+  Copper: [170, 85, 45],
+  'Ash brown': [110, 95, 85],
+  Caramel: [165, 105, 55],
 }
 
-export function drawHaircut(ctx, lm, w, h, cutName, colorName = 'Chocolate', opacity = 0.88) {
+// Hairstyle configuration & image cache
+const STYLE_CONFIG = {
+  'Layered Bob': {
+    src: '/hairstyles/layered_bob.png',
+    anchorX: 0.50,
+    anchorY: 0.20,
+    scaleW: 2.30,
+    scaleH: 1.55,
+  },
+  'Curtain Bangs': {
+    src: '/hairstyles/curtain_bangs.png',
+    anchorX: 0.50,
+    anchorY: 0.18,
+    scaleW: 2.35,
+    scaleH: 1.65,
+  },
+  'Long Waves': {
+    src: '/hairstyles/long_waves.png',
+    anchorX: 0.50,
+    anchorY: 0.16,
+    scaleW: 2.45,
+    scaleH: 2.15,
+  },
+  'Pixie Cut': {
+    src: '/hairstyles/pixie_cut.png',
+    anchorX: 0.50,
+    anchorY: 0.25,
+    scaleW: 2.10,
+    scaleH: 1.35,
+  },
+  'Angled Lob': {
+    src: '/hairstyles/layered_bob.png',
+    anchorX: 0.50,
+    anchorY: 0.20,
+    scaleW: 2.35,
+    scaleH: 1.68,
+  },
+  'Side-Swept Fringe': {
+    src: '/hairstyles/curtain_bangs.png',
+    anchorX: 0.50,
+    anchorY: 0.19,
+    scaleW: 2.30,
+    scaleH: 1.60,
+  },
+  'Chin-Length Bob': {
+    src: '/hairstyles/layered_bob.png',
+    anchorX: 0.50,
+    anchorY: 0.22,
+    scaleW: 2.25,
+    scaleH: 1.50,
+  },
+  'Soft Waves': {
+    src: '/hairstyles/long_waves.png',
+    anchorX: 0.50,
+    anchorY: 0.16,
+    scaleW: 2.45,
+    scaleH: 2.10,
+  },
+}
+
+// In-memory image & tinted cache
+const imageCache = {}
+const tintCache = {}
+
+function getLoadedImage(src) {
+  if (!imageCache[src]) {
+    const img = new Image()
+    img.src = src
+    img.onload = () => {
+      imageCache[src] = img
+    }
+    // Return null while loading
+    return null
+  }
+  return imageCache[src].complete ? imageCache[src] : null
+}
+
+function getTintedImage(img, src, colorName) {
+  const rgb = HAIR_COLORS_RGB[colorName]
+  if (!rgb) return img // Natural
+
+  const key = `${src}_${colorName}`
+  if (tintCache[key]) return tintCache[key]
+
+  const off = document.createElement('canvas')
+  off.width = img.width
+  off.height = img.height
+  const octx = off.getContext('2d')
+
+  // Draw base hair image
+  octx.drawImage(img, 0, 0)
+
+  // Blend color tone
+  octx.globalCompositeOperation = 'color'
+  octx.fillStyle = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
+  octx.fillRect(0, 0, off.width, off.height)
+
+  // Add soft luster highlight
+  octx.globalCompositeOperation = 'soft-light'
+  octx.fillStyle = `rgb(${Math.min(255, rgb[0] + 50)}, ${Math.min(255, rgb[1] + 50)}, ${Math.min(255, rgb[2] + 50)})`
+  octx.fillRect(0, 0, off.width, off.height)
+
+  // Keep original transparency mask
+  octx.globalCompositeOperation = 'destination-in'
+  octx.drawImage(img, 0, 0)
+
+  tintCache[key] = off
+  return off
+}
+
+/**
+ * Main drawHaircut function
+ */
+export function drawHaircut(ctx, lm, w, h, cutName, colorName = 'Chocolate', opacity = 0.95) {
   if (!ctx || !lm || !cutName) return
 
-  const palette = HAIR_PALETTES[colorName] || HAIR_PALETTES.Chocolate
-  const [br, bg, bb] = palette.base
-  const [hr, hg, hb] = palette.highlight
-  const [sr, sg, sb] = palette.shadow
-
+  const cfg = STYLE_CONFIG[cutName] || STYLE_CONFIG['Layered Bob']
   const top = px(lm, 10, w, h)
   const chin = px(lm, 152, w, h)
   const leftCheek = px(lm, 234, w, h)
   const rightCheek = px(lm, 454, w, h)
-  const leftJaw = px(lm, 172, w, h)
-  const rightJaw = px(lm, 397, w, h)
-  const nose = px(lm, 4, w, h)
-  const browMid = px(lm, 151, w, h)
+  const foreheadCenter = px(lm, 151, w, h)
 
   const faceW = dist(leftCheek, rightCheek)
   const faceH = dist(top, chin)
-  const midX = (leftCheek.x + rightCheek.x) / 2
   const angle = Math.atan2(rightCheek.y - leftCheek.y, rightCheek.x - leftCheek.x)
+
+  // Head anchor position: top of forehead / hairline
+  const anchorPos = {
+    x: (top.x * 0.7 + foreheadCenter.x * 0.3),
+    y: top.y,
+  }
+
+  const targetW = faceW * cfg.scaleW
+  const targetH = faceH * cfg.scaleH
+
+  // Check if photographic transparent PNG is loaded
+  const baseImg = getLoadedImage(cfg.src)
 
   ctx.save()
   ctx.globalAlpha = opacity
+  ctx.translate(anchorPos.x, anchorPos.y)
+  ctx.rotate(angle)
 
-  // Base linear gradient for hair depth
-  const grad = ctx.createLinearGradient(midX, top.y - faceH * 0.4, midX, chin.y + faceH * 0.6)
-  grad.addColorStop(0, `rgb(${hr}, ${hg}, ${hb})`)
-  grad.addColorStop(0.35, `rgb(${br}, ${bg}, ${bb})`)
-  grad.addColorStop(1, `rgb(${sr}, ${sg}, ${sb})`)
-
-  ctx.fillStyle = grad
-  ctx.strokeStyle = `rgba(${sr}, ${sg}, ${sb}, 0.6)`
-  ctx.lineWidth = 2
-
-  if (cutName.includes('Bob') || cutName.includes('Lob')) {
-    renderBob(ctx, top, chin, leftCheek, rightCheek, leftJaw, rightJaw, faceW, faceH, grad, palette)
-  } else if (cutName.includes('Bangs') || cutName.includes('Fringe')) {
-    renderCurtainBangs(ctx, top, browMid, leftCheek, rightCheek, faceW, faceH, grad, palette)
-  } else if (cutName.includes('Waves') || cutName.includes('Layers')) {
-    renderLongLayers(ctx, top, chin, leftCheek, rightCheek, leftJaw, rightJaw, faceW, faceH, grad, palette)
-  } else if (cutName.includes('Pixie')) {
-    renderPixie(ctx, top, browMid, leftCheek, rightCheek, faceW, faceH, grad, palette)
+  if (baseImg) {
+    const hairImage = getTintedImage(baseImg, cfg.src, colorName)
+    ctx.drawImage(
+      hairImage,
+      -targetW * cfg.anchorX,
+      -targetH * cfg.anchorY,
+      targetW,
+      targetH
+    )
   } else {
-    // Default flattering layers
-    renderLongLayers(ctx, top, chin, leftCheek, rightCheek, leftJaw, rightJaw, faceW, faceH, grad, palette)
+    // If photographic image is still downloading or fallback:
+    // Render realistic procedural hair strands with natural texture (NEVER flat cartoon curves!)
+    renderRealisticStrandHair(ctx, targetW, targetH, cfg, colorName)
   }
-
-  // Draw silky shine highlights
-  renderShine(ctx, top, leftCheek, rightCheek, faceW, faceH, palette)
 
   ctx.restore()
 }
 
-function renderBob(ctx, top, chin, lCheek, rCheek, lJaw, rJaw, fW, fH, grad, palette) {
-  // Left side volume & inward curl
-  ctx.beginPath()
-  ctx.moveTo(top.x - fW * 0.15, top.y - fH * 0.22)
-  ctx.bezierCurveTo(
-    lCheek.x - fW * 0.45, top.y - fH * 0.15,
-    lCheek.x - fW * 0.50, lJaw.y,
-    lJaw.x + fW * 0.05, chin.y + fH * 0.08
-  )
-  ctx.bezierCurveTo(
-    lJaw.x + fW * 0.18, chin.y + fH * 0.02,
-    lCheek.x - fW * 0.15, lJaw.y - fH * 0.15,
-    lCheek.x - fW * 0.05, top.y + fH * 0.1
-  )
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
+/**
+ * Realistic procedural multi-strand hair synthesis fallback
+ * Draws feathered, dimensional hair strands with organic flow and specular highlights
+ */
+function renderRealisticStrandHair(ctx, w, h, cfg, colorName) {
+  const rgb = HAIR_COLORS_RGB[colorName] || [95, 55, 38]
+  const baseColor = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
+  const darkColor = `rgb(${Math.max(0, rgb[0] - 40)}, ${Math.max(0, rgb[1] - 30)}, ${Math.max(0, rgb[2] - 25)})`
+  const lightColor = `rgb(${Math.min(255, rgb[0] + 60)}, ${Math.min(255, rgb[1] + 50)}, ${Math.min(255, rgb[2] + 40)})`
 
-  // Right side volume & inward curl
+  // 1. Soft volumetric shadow base behind head
+  ctx.save()
+  ctx.filter = 'blur(12px)'
+  ctx.fillStyle = darkColor
   ctx.beginPath()
-  ctx.moveTo(top.x + fW * 0.15, top.y - fH * 0.22)
-  ctx.bezierCurveTo(
-    rCheek.x + fW * 0.45, top.y - fH * 0.15,
-    rCheek.x + fW * 0.50, rJaw.y,
-    rJaw.x - fW * 0.05, chin.y + fH * 0.08
-  )
-  ctx.bezierCurveTo(
-    rJaw.x - fW * 0.18, chin.y + fH * 0.02,
-    rCheek.x + fW * 0.15, rJaw.y - fH * 0.15,
-    rCheek.x + fW * 0.05, top.y + fH * 0.1
-  )
-  ctx.closePath()
+  ctx.ellipse(0, h * 0.2, w * 0.44, h * 0.40, 0, 0, Math.PI * 2)
   ctx.fill()
-  ctx.stroke()
+  ctx.restore()
 
-  // Crown curve
-  ctx.beginPath()
-  ctx.moveTo(lCheek.x - fW * 0.35, top.y)
-  ctx.bezierCurveTo(
-    lCheek.x - fW * 0.2, top.y - fH * 0.28,
-    rCheek.x + fW * 0.2, top.y - fH * 0.28,
-    rCheek.x + fW * 0.35, top.y
-  )
-  ctx.bezierCurveTo(
-    rCheek.x, top.y - fH * 0.1,
-    lCheek.x, top.y - fH * 0.1,
-    lCheek.x - fW * 0.35, top.y
-  )
-  ctx.closePath()
-  ctx.fill()
-}
+  // 2. Realistic multi-layered hair flow strands
+  const strandsCount = 180
+  ctx.lineCap = 'round'
 
-function renderCurtainBangs(ctx, top, brow, lCheek, rCheek, fW, fH, grad, palette) {
-  // Left sweep curtain
-  ctx.beginPath()
-  ctx.moveTo(top.x - fW * 0.02, top.y - fH * 0.12)
-  ctx.bezierCurveTo(
-    top.x - fW * 0.12, brow.y - fH * 0.05,
-    lCheek.x - fW * 0.15, brow.y + fH * 0.15,
-    lCheek.x - fW * 0.25, lCheek.y + fH * 0.25
-  )
-  ctx.bezierCurveTo(
-    lCheek.x - fW * 0.10, lCheek.y + fH * 0.20,
-    lCheek.x - fW * 0.02, brow.y + fH * 0.02,
-    top.x - fW * 0.05, top.y
-  )
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
+  for (let i = 0; i < strandsCount; i++) {
+    const t = (i / strandsCount) - 0.5 // -0.5 to 0.5 across head
+    const startX = t * (w * 0.65)
+    const startY = -h * 0.15 + Math.abs(t) * 18
 
-  // Right sweep curtain
-  ctx.beginPath()
-  ctx.moveTo(top.x + fW * 0.02, top.y - fH * 0.12)
-  ctx.bezierCurveTo(
-    top.x + fW * 0.12, brow.y - fH * 0.05,
-    rCheek.x + fW * 0.15, brow.y + fH * 0.15,
-    rCheek.x + fW * 0.25, rCheek.y + fH * 0.25
-  )
-  ctx.bezierCurveTo(
-    rCheek.x + fW * 0.10, rCheek.y + fH * 0.20,
-    rCheek.x + fW * 0.02, brow.y + fH * 0.02,
-    top.x + fW * 0.05, top.y
-  )
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
+    // Flattering natural curve
+    const cp1X = startX * 1.35
+    const cp1Y = h * 0.25
+    const endX = startX * (1.1 + Math.sin(i * 0.3) * 0.15)
+    const endY = h * (0.65 + Math.cos(i * 0.4) * 0.12)
 
-  // Hairline roots
-  ctx.beginPath()
-  ctx.moveTo(lCheek.x - fW * 0.25, top.y)
-  ctx.bezierCurveTo(top.x - fW * 0.1, top.y - fH * 0.2, top.x + fW * 0.1, top.y - fH * 0.2, rCheek.x + fW * 0.25, top.y)
-  ctx.bezierCurveTo(rCheek.x, top.y - fH * 0.05, lCheek.x, top.y - fH * 0.05, lCheek.x - fW * 0.25, top.y)
-  ctx.closePath()
-  ctx.fill()
-}
-
-function renderLongLayers(ctx, top, chin, lCheek, rCheek, lJaw, rJaw, fW, fH, grad, palette) {
-  // Cascading Left Side
-  ctx.beginPath()
-  ctx.moveTo(top.x - fW * 0.18, top.y - fH * 0.22)
-  ctx.bezierCurveTo(
-    lCheek.x - fW * 0.48, top.y - fH * 0.05,
-    lCheek.x - fW * 0.42, lJaw.y + fH * 0.2,
-    lCheek.x - fW * 0.25, chin.y + fH * 0.55
-  )
-  ctx.bezierCurveTo(
-    lJaw.x + fW * 0.05, chin.y + fH * 0.45,
-    lJaw.x + fW * 0.12, chin.y + fH * 0.15,
-    lCheek.x - fW * 0.08, top.y + fH * 0.15
-  )
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
-
-  // Cascading Right Side
-  ctx.beginPath()
-  ctx.moveTo(top.x + fW * 0.18, top.y - fH * 0.22)
-  ctx.bezierCurveTo(
-    rCheek.x + fW * 0.48, top.y - fH * 0.05,
-    rCheek.x + fW * 0.42, rJaw.y + fH * 0.2,
-    rCheek.x + fW * 0.25, chin.y + fH * 0.55
-  )
-  ctx.bezierCurveTo(
-    rJaw.x - fW * 0.05, chin.y + fH * 0.45,
-    rJaw.x - fW * 0.12, chin.y + fH * 0.15,
-    rCheek.x + fW * 0.08, top.y + fH * 0.15
-  )
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
-
-  // Full Crown Volume
-  ctx.beginPath()
-  ctx.moveTo(lCheek.x - fW * 0.38, top.y + fH * 0.05)
-  ctx.bezierCurveTo(
-    lCheek.x - fW * 0.25, top.y - fH * 0.30,
-    rCheek.x + fW * 0.25, top.y - fH * 0.30,
-    rCheek.x + fW * 0.38, top.y + fH * 0.05
-  )
-  ctx.bezierCurveTo(
-    rCheek.x + fW * 0.15, top.y - fH * 0.10,
-    lCheek.x - fW * 0.15, top.y - fH * 0.10,
-    lCheek.x - fW * 0.38, top.y + fH * 0.05
-  )
-  ctx.closePath()
-  ctx.fill()
-}
-
-function renderPixie(ctx, top, brow, lCheek, rCheek, fW, fH, grad, palette) {
-  // Textured Crown & Short Sides
-  ctx.beginPath()
-  ctx.moveTo(lCheek.x - fW * 0.22, top.y + fH * 0.1)
-  ctx.bezierCurveTo(
-    lCheek.x - fW * 0.25, top.y - fH * 0.25,
-    rCheek.x + fW * 0.25, top.y - fH * 0.25,
-    rCheek.x + fW * 0.22, top.y + fH * 0.1
-  )
-  ctx.bezierCurveTo(
-    rCheek.x + fW * 0.05, brow.y - fH * 0.05,
-    lCheek.x - fW * 0.05, brow.y - fH * 0.05,
-    lCheek.x - fW * 0.22, top.y + fH * 0.1
-  )
-  ctx.closePath()
-  ctx.fill()
-
-  // Wispy textured fringe
-  for (let i = -3; i <= 3; i++) {
-    const ox = top.x + i * (fW * 0.06)
     ctx.beginPath()
-    ctx.moveTo(ox, top.y - fH * 0.08)
-    ctx.lineTo(ox + (i % 2 === 0 ? 8 : -6), brow.y + (i % 2 === 0 ? 5 : 2))
-    ctx.strokeStyle = `rgba(${palette.shadow[0]}, ${palette.shadow[1]}, ${palette.shadow[2]}, 0.8)`
-    ctx.lineWidth = 3
+    ctx.moveTo(startX, startY)
+    ctx.bezierCurveTo(cp1X, cp1Y, cp1X * 0.95, cp1Y + 30, endX, endY)
+
+    // Strand color variations (depth + highlights)
+    if (i % 7 === 0) {
+      ctx.strokeStyle = lightColor
+      ctx.lineWidth = 1.8
+      ctx.globalAlpha = 0.65
+    } else if (i % 3 === 0) {
+      ctx.strokeStyle = darkColor
+      ctx.lineWidth = 2.2
+      ctx.globalAlpha = 0.75
+    } else {
+      ctx.strokeStyle = baseColor
+      ctx.lineWidth = 2.0
+      ctx.globalAlpha = 0.85
+    }
+
     ctx.stroke()
   }
-}
 
-function renderShine(ctx, top, lCheek, rCheek, fW, fH, palette) {
+  // 3. Silky crown sheen (specular lighting)
   ctx.save()
   ctx.globalCompositeOperation = 'soft-light'
-  ctx.fillStyle = `rgba(${palette.highlight[0]}, ${palette.highlight[1]}, ${palette.highlight[2]}, 0.55)`
+  const sheen = ctx.createLinearGradient(0, -h * 0.15, 0, h * 0.1)
+  sheen.addColorStop(0, 'rgba(255,255,255,0)')
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0.7)')
+  sheen.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = sheen
   ctx.filter = 'blur(6px)'
-
   ctx.beginPath()
-  ctx.ellipse(top.x, top.y - fH * 0.12, fW * 0.28, fH * 0.06, 0, 0, Math.PI * 2)
+  ctx.ellipse(0, 0, w * 0.35, h * 0.08, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.restore()
 }

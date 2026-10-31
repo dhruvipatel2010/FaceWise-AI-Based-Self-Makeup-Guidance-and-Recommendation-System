@@ -179,3 +179,4 @@ REALISTIC_PRODUCTS = [
 db.products.delete_many({})
 db.products.insert_many(REALISTIC_PRODUCTS)
 print(f"Successfully populated {len(REALISTIC_PRODUCTS)} realistic beauty products into MongoDB Atlas!")
+
