@@ -43,3 +43,4 @@ for src_file, dest_file in MAPPINGS:
         print(f"File not found: {src}")
 
 print("All hairstyle transparent PNGs prepared successfully!")
+

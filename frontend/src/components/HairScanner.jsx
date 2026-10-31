@@ -22,28 +22,28 @@ const HAIR_COLORS = {
 const HAIRCUT_PREVIEWS = {
   Oval: [
     { name: 'Layered Bob', desc: 'Adds movement and flatters balanced cheekbones' },
-    { name: 'Long Layers', desc: 'Maintains length with soft facial framing' },
-    { name: 'Side-Swept Fringe', desc: 'Softens the forehead line gracefully' },
+    { name: 'Curtain Bangs', desc: 'Soft romantic fringe framing the face' },
+    { name: 'Long Waves', desc: 'Maintains length with soft dimensional volume' },
   ],
   Round: [
     { name: 'Angled Lob', desc: 'Elongates the jawline and creates vertical balance' },
-    { name: 'Long Waves', desc: 'Adds height to slim round cheeks' },
-    { name: 'Curtain Bangs', desc: 'Frames the sides to narrow face width' },
+    { name: 'Long Waves', desc: 'Adds height and slimming vertical lines' },
+    { name: 'Curtain Bangs', desc: 'Frames the sides to narrow cheek width' },
   ],
   Square: [
     { name: 'Soft Waves', desc: 'Softens strong jaw corners and adds flow' },
-    { name: 'Side-Swept Fringe', desc: 'Breaks up sharp angles gently' },
-    { name: 'Long Layers', desc: 'Creates diagonal slimming lines' },
+    { name: 'Side-Swept Fringe', desc: 'Breaks up sharp angular jawlines gently' },
+    { name: 'Layered Bob', desc: 'Curves softly under the jaw to balance angles' },
   ],
   Heart: [
     { name: 'Chin-Length Bob', desc: 'Adds fullness around the narrower jaw and chin' },
-    { name: 'Curtain Bangs', desc: 'Draws focus to eyes and lips' },
-    { name: 'Pixie Cut', desc: 'Balances wider forehead with textured sides' },
+    { name: 'Curtain Bangs', desc: 'Draws focus to eyes and balances wider forehead' },
+    { name: 'Pixie Cut', desc: 'Textured crown with soft tapered temples' },
   ],
   Oblong: [
-    { name: 'Layered Bob', desc: 'Shortens face length and widens cheek area' },
-    { name: 'Side-Swept Fringe', desc: 'Adds width rather than height' },
-    { name: 'Curtain Bangs', desc: 'Frames face horizontally' },
+    { name: 'Layered Bob', desc: 'Shortens face length and adds width at cheekbones' },
+    { name: 'Curtain Bangs', desc: 'Shortens forehead and creates horizontal balance' },
+    { name: 'Soft Waves', desc: 'Adds side volume rather than vertical height' },
   ],
 }
 
@@ -68,10 +68,15 @@ export default function HairScanner({ onFaceShapeDetected }) {
   const [activeCut, setActiveCut] = useState('Layered Bob')
   const [showCutOverlay, setShowCutOverlay] = useState(true)
 
+  // Interactive Haircut Fitting Controls
+  const [hairScale, setHairScale] = useState(1.0)
+  const [hairHeight, setHairHeight] = useState(0)
+
   const hairRef = useRef(HAIR_COLORS['Chocolate'])
   const hairNameRef = useRef('Chocolate')
   const activeCutRef = useRef('Layered Bob')
   const showCutOverlayRef = useRef(true)
+  const fitOptionsRef = useRef({ scaleMultiplier: 1.0, nudgeY: 0 })
 
   useEffect(() => {
     activeCutRef.current = activeCut
@@ -80,6 +85,13 @@ export default function HairScanner({ onFaceShapeDetected }) {
   useEffect(() => {
     showCutOverlayRef.current = showCutOverlay
   }, [showCutOverlay])
+
+  useEffect(() => {
+    fitOptionsRef.current = {
+      scaleMultiplier: hairScale,
+      nudgeY: hairHeight,
+    }
+  }, [hairScale, hairHeight])
 
   async function pickHair(name) {
     setHairName(name)
@@ -236,7 +248,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
           if (onFaceShapeDetected) onFaceShapeDetected(s)
         }
 
-        // 1. Live hair color tint via segmentation
+        // 1. Live real hair color tinting via AI segmentation
         if (hairRef.current && segmenterRef.current) {
           frameRef.current++
           if (frameRef.current % 2 === 0) {
@@ -245,9 +257,17 @@ export default function HairScanner({ onFaceShapeDetected }) {
           paintHair(ctx, w, h)
         }
 
-        // 2. Live realistic haircut styling overlay
+        // 2. Realistic Photographic Haircut Try-On Overlay
         if (showCutOverlayRef.current && activeCutRef.current) {
-          drawHaircut(ctx, lm, w, h, activeCutRef.current, hairNameRef.current)
+          drawHaircut(
+            ctx,
+            lm,
+            w,
+            h,
+            activeCutRef.current,
+            hairNameRef.current,
+            fitOptionsRef.current
+          )
         }
       }
     }
@@ -270,10 +290,10 @@ export default function HairScanner({ onFaceShapeDetected }) {
             AI Face Shape & Hair Try-On
           </span>
           <h2 className='mt-2 font-display text-2xl font-bold text-plum'>
-            Live Face Shape Haircut & Color Camera Preview
+            Photorealistic Haircut & Color Camera Preview
           </h2>
           <p className='text-sm text-plum/70'>
-            Measure your face shape live on camera, recolor your hair in real-time, and preview haircuts rendered directly over your face.
+            Measure your face shape live on camera, recolor your real hair, and test high-definition photographic haircuts.
           </p>
         </div>
 
@@ -340,7 +360,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
 
           {active && faceShape && (
             <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
-              Detected: {faceShape.shape} Face · Style: {activeCut}
+              Detected: {faceShape.shape} Face · Cut: {activeCut}
             </div>
           )}
         </div>
@@ -396,6 +416,55 @@ export default function HairScanner({ onFaceShapeDetected }) {
                 </div>
               ))}
             </div>
+
+            {/* Precision Haircut Fit Controls */}
+            {active && showCutOverlay && (
+              <div className='mt-5 rounded-2xl border border-plum/10 bg-white p-3.5 space-y-3'>
+                <div className='flex items-center justify-between'>
+                  <span className='text-xs font-bold text-plum'>Fine-Tune Haircut Fit:</span>
+                  <button
+                    onClick={() => {
+                      setHairScale(1.0)
+                      setHairHeight(0)
+                    }}
+                    className='text-[10px] font-semibold text-rose hover:underline'
+                  >
+                    Reset Fit
+                  </button>
+                </div>
+
+                <div>
+                  <div className='flex justify-between text-[11px] text-plum/70'>
+                    <span>Hairline Height (Up/Down):</span>
+                    <span>{hairHeight > 0 ? `+${hairHeight}` : hairHeight}px</span>
+                  </div>
+                  <input
+                    type='range'
+                    min='-35'
+                    max='35'
+                    value={hairHeight}
+                    onChange={(e) => setHairHeight(parseInt(e.target.value))}
+                    className='w-full accent-rose cursor-pointer'
+                  />
+                </div>
+
+                <div>
+                  <div className='flex justify-between text-[11px] text-plum/70'>
+                    <span>Haircut Width / Scale:</span>
+                    <span>{Math.round(hairScale * 100)}%</span>
+                  </div>
+                  <input
+                    type='range'
+                    min='0.85'
+                    max='1.20'
+                    step='0.01'
+                    value={hairScale}
+                    onChange={(e) => setHairScale(parseFloat(e.target.value))}
+                    className='w-full accent-rose cursor-pointer'
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <p className='mt-4 text-[11px] text-plum/60 leading-relaxed'>
