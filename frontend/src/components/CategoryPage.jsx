@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import api, { errorMessage } from '../services/api'
 import ProductCard from './ProductCard'
 
-export default function CategoryPage({ category, title, intro }) {
+export default function CategoryPage({ category, title, intro, scanner }) {
   const [products, setProducts] = useState([])
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
@@ -36,33 +36,45 @@ export default function CategoryPage({ category, title, intro }) {
 
   return (
     <main className='mx-auto max-w-6xl px-6 py-10 md:px-12'>
-      <h1 className='font-display text-4xl'>{title}</h1>
-      <p className='mt-2 max-w-xl text-plum/70'>{intro}</p>
+      <h1 className='font-display text-4xl font-bold text-plum'>{title}</h1>
+      <p className='mt-2 max-w-2xl text-plum/70'>{intro}</p>
 
-      <form onSubmit={handleSearch} className='mt-6 flex flex-wrap gap-3'>
-        <label htmlFor='search' className='sr-only'>Search products</label>
-        <input
-          id='search'
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={'Search in ' + title}
-          className='min-h-12 flex-1 rounded-full border-2 border-plum/20 bg-white px-5 focus:border-rose focus:outline-none'
-        />
-        <button type='submit' className='min-h-12 rounded-full bg-rose px-8 font-semibold text-white hover:opacity-90'>
-          Search
-        </button>
-      </form>
+      {/* Embedded Live Camera AI Scanner Module */}
+      {scanner && <div className='mt-8'>{scanner}</div>}
 
-      {error && <p role='alert' className='mt-6 font-semibold text-rose'>{error}</p>}
-      {loading && <p className='mt-6 text-plum/70'>Loading products...</p>}
-      {!loading && !error && products.length === 0 && (
-        <p className='mt-6 text-plum/70'>No products found.</p>
-      )}
+      <div className='mt-12 border-t border-plum/10 pt-8'>
+        <div className='flex flex-wrap items-center justify-between gap-4'>
+          <div>
+            <h2 className='font-display text-2xl font-bold text-plum'>Curated {title} Products</h2>
+            <p className='text-xs text-plum/60'>Formulated and matched for your skin tone, texture, and style</p>
+          </div>
 
-      <div className='mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3'>
-        {products.map((p) => (
-          <ProductCard key={p.id} product={p} />
-        ))}
+          <form onSubmit={handleSearch} className='flex w-full max-w-md gap-2'>
+            <label htmlFor='search' className='sr-only'>Search products</label>
+            <input
+              id='search'
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={'Search in ' + title}
+              className='min-h-11 flex-1 rounded-full border-2 border-plum/20 bg-white px-5 text-sm focus:border-rose focus:outline-none'
+            />
+            <button type='submit' className='min-h-11 rounded-full bg-rose px-6 text-sm font-semibold text-white hover:opacity-90'>
+              Search
+            </button>
+          </form>
+        </div>
+
+        {error && <p role='alert' className='mt-6 font-semibold text-rose'>{error}</p>}
+        {loading && <p className='mt-6 text-plum/70'>Loading products from catalog...</p>}
+        {!loading && !error && products.length === 0 && (
+          <p className='mt-6 text-plum/70'>No products found.</p>
+        )}
+
+        <div className='mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3'>
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
       </div>
     </main>
   )
