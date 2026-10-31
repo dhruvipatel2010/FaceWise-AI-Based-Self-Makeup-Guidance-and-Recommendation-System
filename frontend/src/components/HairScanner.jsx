@@ -1,90 +1,136 @@
 import { useEffect, useRef, useState } from 'react'
-import { FaceLandmarker, ImageSegmenter, FilesetResolver } from '@mediapipe/tasks-vision'
+import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 import { getFaceShape } from '../faceShape'
 import { drawHaircut } from '../haircutOverlay'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const FACE_MODEL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
-const HAIR_MODEL =
-  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite'
 
-const HAIR_COLORS = {
-  Natural: null,
-  Chocolate: [107, 65, 48],
-  Honey: [184, 134, 63],
-  Burgundy: [110, 28, 48],
-  Copper: [170, 85, 45],
-  'Ash brown': [110, 95, 85],
-  Caramel: [165, 105, 55],
-}
+// Female hairstyles matching reference screenshot
+const HAIRSTYLES_FEMALE = [
+  {
+    id: 'none',
+    name: 'Original',
+    isNone: true,
+    color: 'Natural',
+    cutStyle: null,
+  },
+  {
+    id: 'messy-bun',
+    name: 'Messy Bun',
+    color: 'Chocolate',
+    cutStyle: 'Curtain Bangs',
+    img: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
+    desc: 'High textured messy bun with soft framing fringe',
+  },
+  {
+    id: 'long-wavy',
+    name: 'Long Wavy',
+    color: 'Honey',
+    cutStyle: 'Long Waves',
+    img: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+    desc: 'Voluminous cascading blonde waves past shoulders',
+  },
+  {
+    id: 'long-straight',
+    name: 'Long Straight',
+    color: 'Honey',
+    cutStyle: 'Long Waves',
+    img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
+    desc: 'Sleek silky straight hair with full blunt fringe bangs',
+  },
+  {
+    id: 'bobcut',
+    name: 'Bobcut',
+    color: 'Honey',
+    cutStyle: 'Layered Bob',
+    img: 'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=300&q=80',
+    desc: 'Classic rounded bobcut with blunt fringe',
+  },
+  {
+    id: 'curtain-wavy-red',
+    name: 'Curtain Red',
+    color: 'Copper',
+    cutStyle: 'Curtain Bangs',
+    img: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80',
+    desc: 'Lush vibrant auburn red waves with curtain bangs',
+  },
+  {
+    id: 'pixie-pink',
+    name: 'Pixie Pink',
+    color: 'Burgundy',
+    cutStyle: 'Pixie Cut',
+    img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+    desc: 'Chic textured pixie cut with wispy bangs',
+  },
+]
 
-const HAIRCUT_PREVIEWS = {
-  Oval: [
-    { name: 'Layered Bob', desc: 'Adds movement and flatters balanced cheekbones' },
-    { name: 'Curtain Bangs', desc: 'Soft romantic fringe framing the face' },
-    { name: 'Long Waves', desc: 'Maintains length with soft dimensional volume' },
-  ],
-  Round: [
-    { name: 'Angled Lob', desc: 'Elongates the jawline and creates vertical balance' },
-    { name: 'Long Waves', desc: 'Adds height and slimming vertical lines' },
-    { name: 'Curtain Bangs', desc: 'Frames the sides to narrow cheek width' },
-  ],
-  Square: [
-    { name: 'Soft Waves', desc: 'Softens strong jaw corners and adds flow' },
-    { name: 'Side-Swept Fringe', desc: 'Breaks up sharp angular jawlines gently' },
-    { name: 'Layered Bob', desc: 'Curves softly under the jaw to balance angles' },
-  ],
-  Heart: [
-    { name: 'Chin-Length Bob', desc: 'Adds fullness around the narrower jaw and chin' },
-    { name: 'Curtain Bangs', desc: 'Draws focus to eyes and balances wider forehead' },
-    { name: 'Pixie Cut', desc: 'Textured crown with soft tapered temples' },
-  ],
-  Oblong: [
-    { name: 'Layered Bob', desc: 'Shortens face length and adds width at cheekbones' },
-    { name: 'Curtain Bangs', desc: 'Shortens forehead and creates horizontal balance' },
-    { name: 'Soft Waves', desc: 'Adds side volume rather than vertical height' },
-  ],
-}
+// Male hairstyles
+const HAIRSTYLES_MALE = [
+  {
+    id: 'none',
+    name: 'Original',
+    isNone: true,
+    color: 'Natural',
+    cutStyle: null,
+  },
+  {
+    id: 'textured-crop',
+    name: 'Textured Crop',
+    color: 'Natural',
+    cutStyle: 'Pixie Cut',
+    img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
+    desc: 'Modern forward-fringe textured crop fade',
+  },
+  {
+    id: 'pompadour',
+    name: 'Pompadour',
+    color: 'Chocolate',
+    cutStyle: 'Long Waves',
+    img: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
+    desc: 'High-volume swept back taper fade',
+  },
+  {
+    id: 'wavy-quiff',
+    name: 'Wavy Quiff',
+    color: 'Caramel',
+    cutStyle: 'Curtain Bangs',
+    img: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=300&q=80',
+    desc: 'Natural flow quiff with textured movement',
+  },
+]
 
 export default function HairScanner({ onFaceShapeDetected }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const landmarkerRef = useRef(null)
-  const segmenterRef = useRef(null)
   const filesetRef = useRef(null)
-  const hairMaskRef = useRef(null)
   const rafRef = useRef(0)
-  const frameRef = useRef(0)
   const lastShapeAt = useRef(0)
 
+  const [gender, setGender] = useState('FEMALE')
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [faceShape, setFaceShape] = useState(null)
-  const [hairName, setHairName] = useState('Chocolate')
-  const [activeCut, setActiveCut] = useState('Layered Bob')
-  const [showCutOverlay, setShowCutOverlay] = useState(true)
 
-  // Interactive Haircut Fitting Controls
+  // Selected Style (defaults to Long Straight like reference screenshot!)
+  const [selectedStyle, setSelectedStyle] = useState(HAIRSTYLES_FEMALE[3])
   const [hairScale, setHairScale] = useState(1.0)
   const [hairHeight, setHairHeight] = useState(0)
+  const [capturedPhoto, setCapturedPhoto] = useState(null)
 
-  const hairRef = useRef(HAIR_COLORS['Chocolate'])
-  const hairNameRef = useRef('Chocolate')
-  const activeCutRef = useRef('Layered Bob')
-  const showCutOverlayRef = useRef(true)
+  const activeCutRef = useRef(HAIRSTYLES_FEMALE[3].cutStyle)
+  const hairColorRef = useRef(HAIRSTYLES_FEMALE[3].color)
   const fitOptionsRef = useRef({ scaleMultiplier: 1.0, nudgeY: 0 })
 
   useEffect(() => {
-    activeCutRef.current = activeCut
-  }, [activeCut])
-
-  useEffect(() => {
-    showCutOverlayRef.current = showCutOverlay
-  }, [showCutOverlay])
+    activeCutRef.current = selectedStyle.cutStyle
+    hairColorRef.current = selectedStyle.color
+  }, [selectedStyle])
 
   useEffect(() => {
     fitOptionsRef.current = {
@@ -93,75 +139,34 @@ export default function HairScanner({ onFaceShapeDetected }) {
     }
   }, [hairScale, hairHeight])
 
-  async function pickHair(name) {
-    setHairName(name)
-    hairNameRef.current = name
-    hairRef.current = HAIR_COLORS[name]
-    if (!HAIR_COLORS[name]) {
-      hairMaskRef.current = null
-      return
-    }
+  const currentStyles = gender === 'FEMALE' ? HAIRSTYLES_FEMALE : HAIRSTYLES_MALE
 
-    if (!segmenterRef.current && filesetRef.current) {
-      try {
-        segmenterRef.current = await ImageSegmenter.createFromOptions(filesetRef.current, {
-          baseOptions: { modelAssetPath: HAIR_MODEL },
-          runningMode: 'VIDEO',
-          outputCategoryMask: true,
-          outputConfidenceMasks: false,
-        })
-      } catch (err) {
-        console.error('Failed to load hair segmenter', err)
-      }
-    }
+  function selectHairstyle(item) {
+    setSelectedStyle(item)
+    activeCutRef.current = item.cutStyle
+    hairColorRef.current = item.color
   }
 
-  function updateMask(res) {
-    const m = res.categoryMask
-    if (!m || !hairRef.current) return
-    const data = m.getAsUint8Array()
-    const mw = m.width
-    const mh = m.height
-    let c = hairMaskRef.current
-    if (!c || c.width !== mw || c.height !== mh) {
-      c = document.createElement('canvas')
-      c.width = mw
-      c.height = mh
-      hairMaskRef.current = c
-    }
-    const cctx = c.getContext('2d')
-    const img = cctx.createImageData(mw, mh)
-    const [r, g, b] = hairRef.current
-    for (let i = 0; i < data.length; i++) {
-      if (data[i] === 1) {
-        const k = i * 4
-        img.data[k] = r
-        img.data[k + 1] = g
-        img.data[k + 2] = b
-        img.data[k + 3] = 255
+  function handlePhotoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        setCapturedPhoto(event.target.result)
+        stopCamera()
       }
+      img.src = event.target.result
     }
-    cctx.putImageData(img, 0, 0)
-  }
-
-  function paintHair(ctx, w, h) {
-    const mask = hairMaskRef.current
-    if (!mask) return
-    ctx.save()
-    ctx.filter = 'blur(1.5px)'
-    ctx.globalCompositeOperation = 'color'
-    ctx.globalAlpha = 0.75
-    ctx.drawImage(mask, 0, 0, w, h)
-    ctx.globalCompositeOperation = 'soft-light'
-    ctx.globalAlpha = 0.50
-    ctx.drawImage(mask, 0, 0, w, h)
-    ctx.restore()
+    reader.readAsDataURL(file)
   }
 
   async function startCamera() {
     setError('')
     setLoading(true)
-    setStatus('Loading AI face & hair models...')
+    setStatus('Loading AI facial vision...')
+    setCapturedPhoto(null)
 
     try {
       if (!filesetRef.current) {
@@ -174,18 +179,10 @@ export default function HairScanner({ onFaceShapeDetected }) {
           numFaces: 1,
         })
       }
-      if (!segmenterRef.current) {
-        segmenterRef.current = await ImageSegmenter.createFromOptions(filesetRef.current, {
-          baseOptions: { modelAssetPath: HAIR_MODEL },
-          runningMode: 'VIDEO',
-          outputCategoryMask: true,
-          outputConfidenceMasks: false,
-        })
-      }
 
-      setStatus('Requesting camera access...')
+      setStatus('Accessing camera...')
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
         audio: false,
       })
       streamRef.current = stream
@@ -201,7 +198,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
       rafRef.current = requestAnimationFrame(loop)
     } catch (err) {
       console.error(err)
-      setError('Could not access camera. Please allow camera permissions and ensure no other app is using it.')
+      setError('Camera access denied. Please allow camera permissions.')
       setLoading(false)
       setStatus('')
     }
@@ -214,10 +211,6 @@ export default function HairScanner({ onFaceShapeDetected }) {
       streamRef.current = null
     }
     if (videoRef.current) videoRef.current.srcObject = null
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d')
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-    }
     setActive(false)
     setStatus('')
   }
@@ -234,6 +227,8 @@ export default function HairScanner({ onFaceShapeDetected }) {
       canvas.width = w
       canvas.height = h
       const ctx = canvas.getContext('2d')
+
+      // Draw real camera video feed
       ctx.drawImage(video, 0, 0, w, h)
 
       const result = landmarker.detectForVideo(video, performance.now())
@@ -241,31 +236,22 @@ export default function HairScanner({ onFaceShapeDetected }) {
         const lm = result.faceLandmarks[0]
         const now = performance.now()
 
-        if (now - lastShapeAt.current > 500) {
+        if (now - lastShapeAt.current > 400) {
           lastShapeAt.current = now
           const s = getFaceShape(lm)
           setFaceShape(s)
           if (onFaceShapeDetected) onFaceShapeDetected(s)
         }
 
-        // 1. Live real hair color tinting via AI segmentation
-        if (hairRef.current && segmenterRef.current) {
-          frameRef.current++
-          if (frameRef.current % 2 === 0) {
-            segmenterRef.current.segmentForVideo(video, performance.now(), updateMask)
-          }
-          paintHair(ctx, w, h)
-        }
-
-        // 2. Realistic Photographic Haircut Try-On Overlay
-        if (showCutOverlayRef.current && activeCutRef.current) {
+        // Render selected photographic haircut overlay
+        if (activeCutRef.current) {
           drawHaircut(
             ctx,
             lm,
             w,
             h,
             activeCutRef.current,
-            hairNameRef.current,
+            hairColorRef.current,
             fitOptionsRef.current
           )
         }
@@ -279,199 +265,223 @@ export default function HairScanner({ onFaceShapeDetected }) {
     return () => stopCamera()
   }, [])
 
-  const haircuts = HAIRCUT_PREVIEWS[faceShape?.shape || 'Oval'] || HAIRCUT_PREVIEWS.Oval
-
   return (
-    <div className='overflow-hidden rounded-3xl border border-plum/10 bg-white p-6 shadow-sm'>
-      {/* Header */}
-      <div className='flex flex-wrap items-center justify-between gap-4'>
-        <div>
-          <span className='rounded-full bg-rose/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-rose'>
-            AI Face Shape & Hair Try-On
-          </span>
-          <h2 className='mt-2 font-display text-2xl font-bold text-plum'>
-            Photorealistic Haircut & Color Camera Preview
-          </h2>
-          <p className='text-sm text-plum/70'>
-            Measure your face shape live on camera, recolor your real hair, and test high-definition photographic haircuts.
-          </p>
+    <div className='mx-auto max-w-xl overflow-hidden rounded-[36px] border border-plum/10 bg-white p-6 shadow-2xl'>
+      {/* ── Header Title (Matches reference screenshot!) ─────────── */}
+      <div className='flex items-center justify-between border-b border-plum/10 pb-4'>
+        <button
+          onClick={stopCamera}
+          className='text-xs font-semibold text-plum/60 hover:text-plum'
+        >
+          {active ? 'Close' : 'FaceWise'}
+        </button>
+        <h2 className='font-display text-2xl font-bold tracking-tight text-plum'>Hairstyle</h2>
+        <div className='flex items-center gap-2'>
+          <label className='cursor-pointer rounded-full bg-lilac/70 px-3 py-1 text-xs font-bold text-plum hover:bg-lilac transition'>
+            Upload 📁
+            <input type='file' accept='image/*' onChange={handlePhotoUpload} className='hidden' />
+          </label>
         </div>
+      </div>
 
-        <div>
-          {!active ? (
-            <button
-              onClick={startCamera}
-              disabled={loading}
-              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50'
-            >
-              {loading ? (status || 'Starting Camera...') : '💇 Start Live Haircut & Color Scan'}
-            </button>
-          ) : (
-            <div className='flex gap-2'>
+      {status && <p className='mt-2 text-center text-xs font-medium text-plum/70 animate-pulse'>{status}</p>}
+      {error && <p role='alert' className='mt-2 text-center text-xs font-semibold text-rose'>{error}</p>}
+
+      {/* ── Main Studio Portrait Viewport (Exact match to reference!) ── */}
+      <div className='relative mt-4 aspect-3/4 w-full overflow-hidden rounded-3xl bg-slate-900 shadow-inner'>
+        {capturedPhoto ? (
+          <img
+            src={capturedPhoto}
+            alt='Hairstyle Try-On'
+            className='h-full w-full object-cover'
+          />
+        ) : (
+          <>
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className={'h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+            />
+            <canvas
+              ref={canvasRef}
+              className={'pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+            />
+          </>
+        )}
+
+        {/* Camera Off Placeholder */}
+        {!active && !capturedPhoto && (
+          <div className='flex h-full w-full flex-col items-center justify-center p-8 text-center text-white'>
+            <div className='flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10 backdrop-blur-md shadow-xl border border-white/20'>
+              <span className='text-3xl'>💇‍♀️</span>
+            </div>
+            <h3 className='mt-4 font-display text-xl font-bold text-white'>Live Hair Studio</h3>
+            <p className='mt-1 max-w-xs text-xs text-white/60 leading-relaxed'>
+              Open camera to test hairstyles live, or upload your portrait photo.
+            </p>
+            <div className='mt-6 flex gap-3'>
               <button
-                onClick={() => setShowCutOverlay(!showCutOverlay)}
+                onClick={startCamera}
+                disabled={loading}
+                className='rounded-full bg-rose px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-rose/95 disabled:opacity-50 transition'
+              >
+                {loading ? 'Starting...' : '📸 Open Camera'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Live Detected Shape Pill */}
+        {active && faceShape && (
+          <div className='absolute top-4 left-4 rounded-full bg-plum/85 px-3.5 py-1 text-[11px] font-bold text-white backdrop-blur-md border border-white/10 shadow-sm'>
+            {faceShape.shape} Face · {selectedStyle.name}
+          </div>
+        )}
+
+        {capturedPhoto && (
+          <button
+            onClick={() => {
+              setCapturedPhoto(null)
+              startCamera()
+            }}
+            className='absolute bottom-4 right-4 rounded-full bg-plum/90 px-4 py-1.5 text-xs font-bold text-white backdrop-blur-md shadow-md'
+          >
+            Switch to Camera
+          </button>
+        )}
+      </div>
+
+      {/* ── Gender Switch (FEMALE | MALE with pink underline) ─────── */}
+      <div className='mt-6 flex items-center justify-center gap-8 border-b border-plum/10 pb-3'>
+        <button
+          onClick={() => {
+            setGender('FEMALE')
+            setSelectedStyle(HAIRSTYLES_FEMALE[3])
+          }}
+          className={
+            'relative pb-2 text-xs font-extrabold tracking-wider transition-all ' +
+            (gender === 'FEMALE' ? 'text-rose' : 'text-plum/40 hover:text-plum')
+          }
+        >
+          FEMALE
+          {gender === 'FEMALE' && (
+            <span className='absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-rose'></span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setGender('MALE')
+            setSelectedStyle(HAIRSTYLES_MALE[1])
+          }}
+          className={
+            'relative pb-2 text-xs font-extrabold tracking-wider transition-all ' +
+            (gender === 'MALE' ? 'text-rose' : 'text-plum/40 hover:text-plum')
+          }
+        >
+          MALE
+          {gender === 'MALE' && (
+            <span className='absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-rose'></span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Horizontal Hairstyle Thumbnail Carousel (Exact Match!) ── */}
+      <div className='mt-4 flex gap-3 overflow-x-auto pb-2 scrollbar-none'>
+        {currentStyles.map((item) => {
+          const isSelected = selectedStyle.id === item.id
+
+          return (
+            <div
+              key={item.id}
+              onClick={() => selectHairstyle(item)}
+              className='flex flex-col items-center shrink-0 cursor-pointer'
+              style={{ width: 84 }}
+            >
+              {/* Card Container */}
+              <div
                 className={
-                  'min-h-10 rounded-full px-5 text-sm font-semibold transition ' +
-                  (showCutOverlay ? 'bg-rose text-white shadow-xs' : 'border border-plum/20 bg-page text-plum')
+                  'relative aspect-3/4 w-full overflow-hidden rounded-2xl border-2 transition-all duration-200 ' +
+                  (isSelected
+                    ? 'border-rose ring-2 ring-rose/40 shadow-lg scale-102'
+                    : 'border-plum/15 bg-white hover:border-rose/50')
                 }
               >
-                {showCutOverlay ? '✓ Haircut Overlay ON' : 'Haircut Overlay OFF'}
-              </button>
-              <button
-                onClick={stopCamera}
-                className='min-h-10 rounded-full border border-plum/30 px-5 text-sm font-semibold hover:bg-plum hover:text-white transition'
+                {item.isNone ? (
+                  // None / Original Icon (Matches the 🚫 in screenshot!)
+                  <div className='flex h-full w-full items-center justify-center bg-page text-plum/40'>
+                    <span className='text-2xl'>⊘</span>
+                  </div>
+                ) : (
+                  <img
+                    src={item.img}
+                    alt={item.name}
+                    className='h-full w-full object-cover'
+                  />
+                )}
+
+                {/* Active Dark Overlay with Refresh / Sync Icon (Exact match to screenshot!) */}
+                {isSelected && !item.isNone && (
+                  <div className='absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[1px]'>
+                    <div className='flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white border border-white/50 shadow-md'>
+                      <span className='text-xs'>🔄</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Hairstyle Label */}
+              <span
+                className={
+                  'mt-1.5 text-center text-[11px] font-bold transition-colors line-clamp-1 ' +
+                  (isSelected ? 'text-rose' : 'text-plum/80')
+                }
               >
-                Stop Camera
-              </button>
+                {item.name}
+              </span>
             </div>
-          )}
-        </div>
+          )
+        })}
       </div>
 
-      {status && <p className='mt-3 text-xs font-medium text-plum/70 animate-pulse'>{status}</p>}
-      {error && <p role='alert' className='mt-3 text-sm font-semibold text-rose'>{error}</p>}
-
-      {/* Camera Viewport & Controls Grid */}
-      <div className='mt-6 grid gap-6 md:grid-cols-12'>
-        {/* Camera Viewport */}
-        <div className='relative aspect-video w-full overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            className={'h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
-          />
-          <canvas
-            ref={canvasRef}
-            className={'pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
-          />
-
-          {!active && (
-            <div className='flex h-full w-full flex-col items-center justify-center p-6 text-center text-plum/60'>
-              <div className='flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm'>
-                <span className='text-2xl'>💇</span>
-              </div>
-              <p className='mt-3 font-display text-lg font-semibold text-plum'>Camera is currently off</p>
-              <p className='mt-1 max-w-sm text-xs text-plum/70'>
-                Click "Start Live Haircut & Color Scan" to test realistic haircuts and tints live on your real face.
-              </p>
-            </div>
-          )}
-
-          {active && faceShape && (
-            <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
-              Detected: {faceShape.shape} Face · Cut: {activeCut}
-            </div>
-          )}
-        </div>
-
-        {/* Hair Color & Haircut Selector */}
-        <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
-          <div>
-            <h3 className='font-display text-base font-bold text-plum'>1. Live Hair Colors</h3>
-            <p className='text-xs text-plum/60'>Recolor your hair live in the camera stream:</p>
-            <div className='mt-2.5 flex flex-wrap gap-2'>
-              {Object.keys(HAIR_COLORS).map((name) => (
-                <button
-                  key={name}
-                  onClick={() => pickHair(name)}
-                  className={
-                    'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
-                    (hairName === name
-                      ? 'bg-rose text-white shadow-xs'
-                      : 'border border-plum/20 bg-white hover:border-rose')
-                  }
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-
-            <h3 className='mt-5 font-display text-base font-bold text-plum'>
-              2. Haircuts for {faceShape?.shape || 'Balanced Facial Proportions'}
-            </h3>
-            <p className='text-xs text-plum/60'>Click any cut to preview live on your head:</p>
-            <div className='mt-2.5 space-y-2'>
-              {haircuts.map((cut) => (
-                <div
-                  key={cut.name}
-                  onClick={() => {
-                    setActiveCut(cut.name)
-                    setShowCutOverlay(true)
-                  }}
-                  className={
-                    'cursor-pointer rounded-xl border p-2.5 transition ' +
-                    (activeCut === cut.name
-                      ? 'border-rose bg-rose/10 shadow-xs ring-1 ring-rose/30'
-                      : 'border-plum/10 bg-white hover:border-plum/30')
-                  }
-                >
-                  <div className='flex items-center justify-between'>
-                    <p className='text-xs font-bold text-plum'>{cut.name}</p>
-                    <span className='rounded-full bg-lilac px-2 py-0.5 text-[10px] font-semibold text-plum'>
-                      {activeCut === cut.name ? '★ Live on Camera' : 'Try Cut'}
-                    </span>
-                  </div>
-                  <p className='mt-0.5 text-[11px] text-plum/70'>{cut.desc}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Precision Haircut Fit Controls */}
-            {active && showCutOverlay && (
-              <div className='mt-5 rounded-2xl border border-plum/10 bg-white p-3.5 space-y-3'>
-                <div className='flex items-center justify-between'>
-                  <span className='text-xs font-bold text-plum'>Fine-Tune Haircut Fit:</span>
-                  <button
-                    onClick={() => {
-                      setHairScale(1.0)
-                      setHairHeight(0)
-                    }}
-                    className='text-[10px] font-semibold text-rose hover:underline'
-                  >
-                    Reset Fit
-                  </button>
-                </div>
-
-                <div>
-                  <div className='flex justify-between text-[11px] text-plum/70'>
-                    <span>Hairline Height (Up/Down):</span>
-                    <span>{hairHeight > 0 ? `+${hairHeight}` : hairHeight}px</span>
-                  </div>
-                  <input
-                    type='range'
-                    min='-35'
-                    max='35'
-                    value={hairHeight}
-                    onChange={(e) => setHairHeight(parseInt(e.target.value))}
-                    className='w-full accent-rose cursor-pointer'
-                  />
-                </div>
-
-                <div>
-                  <div className='flex justify-between text-[11px] text-plum/70'>
-                    <span>Haircut Width / Scale:</span>
-                    <span>{Math.round(hairScale * 100)}%</span>
-                  </div>
-                  <input
-                    type='range'
-                    min='0.85'
-                    max='1.20'
-                    step='0.01'
-                    value={hairScale}
-                    onChange={(e) => setHairScale(parseFloat(e.target.value))}
-                    className='w-full accent-rose cursor-pointer'
-                  />
-                </div>
-              </div>
-            )}
+      {/* ── Live Hairline Fit Sliders (Optional Expand) ───────────── */}
+      {active && !selectedStyle.isNone && (
+        <div className='mt-4 flex items-center justify-between gap-4 rounded-2xl bg-page p-3 text-xs'>
+          <div className='flex-1'>
+            <span className='text-[10px] font-bold text-plum/70 block'>Hairline Position:</span>
+            <input
+              type='range'
+              min='-35'
+              max='35'
+              value={hairHeight}
+              onChange={(e) => setHairHeight(parseInt(e.target.value))}
+              className='w-full accent-rose cursor-pointer'
+            />
           </div>
-
-          <p className='mt-4 text-[11px] text-plum/60 leading-relaxed'>
-            💡 Haircuts dynamically anchor to your facial contours and move with your head tilt.
-          </p>
+          <div className='flex-1'>
+            <span className='text-[10px] font-bold text-plum/70 block'>Hair Volume:</span>
+            <input
+              type='range'
+              min='0.85'
+              max='1.25'
+              step='0.01'
+              value={hairScale}
+              onChange={(e) => setHairScale(parseFloat(e.target.value))}
+              className='w-full accent-rose cursor-pointer'
+            />
+          </div>
+          <button
+            onClick={() => {
+              setHairScale(1.0)
+              setHairHeight(0)
+            }}
+            className='text-[10px] font-bold text-rose hover:underline self-end pb-1'
+          >
+            Reset
+          </button>
         </div>
-      </div>
+      )}
     </div>
   )
 }
