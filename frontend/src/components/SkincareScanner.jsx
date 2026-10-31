@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
-import { sampleTone, analyzeSkinMetrics, drawSkincareOverlay } from '../makeupOverlay'
+import { analyzeSkinMetrics, drawSkincareOverlay } from '../makeupOverlay'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const FACE_MODEL =
@@ -11,11 +11,13 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const landmarkerRef = useRef(null)
+  const filesetRef = useRef(null)
   const rafRef = useRef(0)
   const lastAnalyzedAt = useRef(0)
 
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [skinData, setSkinData] = useState(null)
   const [showZones, setShowZones] = useState(true)
@@ -26,33 +28,41 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
   async function startCamera() {
     setError('')
     setLoading(true)
+    setStatus('Loading AI facial model...')
+
     try {
+      if (!filesetRef.current) {
+        filesetRef.current = await FilesetResolver.forVisionTasks(WASM_URL)
+      }
       if (!landmarkerRef.current) {
-        const vision = await FilesetResolver.forVisionTasks(WASM_URL)
-        landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+        landmarkerRef.current = await FaceLandmarker.createFromOptions(filesetRef.current, {
           baseOptions: { modelAssetPath: FACE_MODEL },
           runningMode: 'VIDEO',
           numFaces: 1,
         })
       }
 
+      setStatus('Requesting camera access...')
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { facingMode: 'user' },
+        audio: false,
       })
       streamRef.current = stream
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play()
-          setActive(true)
-          setLoading(false)
-          loop()
-        }
+        await videoRef.current.play()
       }
+
+      setActive(true)
+      setLoading(false)
+      setStatus('')
+      rafRef.current = requestAnimationFrame(loop)
     } catch (err) {
       console.error(err)
-      setError('Camera access denied or device in use. Please allow camera permission.')
+      setError('Could not access camera. Please allow camera permissions and ensure no other app is using it.')
       setLoading(false)
+      setStatus('')
     }
   }
 
@@ -68,6 +78,7 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
     }
     setActive(false)
+    setStatus('')
   }
 
   function loop() {
@@ -111,6 +122,7 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
 
   return (
     <div className='overflow-hidden rounded-3xl border border-plum/10 bg-white p-6 shadow-sm'>
+      {/* Header */}
       <div className='flex flex-wrap items-center justify-between gap-4'>
         <div>
           <span className='rounded-full bg-rose/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-rose'>
@@ -129,9 +141,9 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
             <button
               onClick={startCamera}
               disabled={loading}
-              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50'
+              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50'
             >
-              {loading ? 'Initializing Diagnostic...' : '🔬 Scan My Skin Live'}
+              {loading ? (status || 'Starting Camera...') : '🔬 Start Live Skin Scan'}
             </button>
           ) : (
             <div className='flex gap-2'>
@@ -143,7 +155,7 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
               </button>
               <button
                 onClick={stopCamera}
-                className='min-h-10 rounded-full border border-plum/30 px-5 text-sm font-semibold hover:bg-plum hover:text-white'
+                className='min-h-10 rounded-full border border-plum/30 px-5 text-sm font-semibold hover:bg-plum hover:text-white transition'
               >
                 Stop Camera
               </button>
@@ -152,74 +164,94 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
         </div>
       </div>
 
-      {error && <p className='mt-4 font-semibold text-rose'>{error}</p>}
+      {status && <p className='mt-3 text-xs font-medium text-plum/70 animate-pulse'>{status}</p>}
+      {error && <p role='alert' className='mt-3 text-sm font-semibold text-rose'>{error}</p>}
 
-      {active && (
-        <div className='mt-6 grid gap-6 md:grid-cols-12'>
-          {/* Camera Canvas Viewport */}
-          <div className='relative overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
-            <video ref={videoRef} playsInline muted className='aspect-video w-full -scale-x-100 object-cover' />
-            <canvas ref={canvasRef} className='pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover' />
+      {/* Camera Viewport & Metrics Grid - ALWAYS IN DOM so videoRef is never null */}
+      <div className='mt-6 grid gap-6 md:grid-cols-12'>
+        {/* Camera Viewport */}
+        <div className='relative aspect-video w-full overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className={'h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+          />
+          <canvas
+            ref={canvasRef}
+            className={'pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+          />
 
-            {skinData && (
-              <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
-                Skin Tone: {skinData.tone} · Tendency: {skinData.skinType}
+          {!active && (
+            <div className='flex h-full w-full flex-col items-center justify-center p-6 text-center text-plum/60'>
+              <div className='flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm'>
+                <span className='text-2xl'>📷</span>
               </div>
-            )}
-          </div>
-
-          {/* Diagnostic Metrics Display */}
-          <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
-            <div>
-              <h3 className='font-display text-base font-bold text-plum'>Scanned Skin Metrics</h3>
-
-              <div className='mt-3 space-y-2.5 text-xs'>
-                <div className='flex items-center justify-between rounded-xl bg-white p-2.5'>
-                  <span className='text-plum/70'>Estimated Skin Profile:</span>
-                  <span className='font-bold text-rose'>{skinData?.skinType || 'Scanning...'}</span>
-                </div>
-                <div className='flex items-center justify-between rounded-xl bg-white p-2.5'>
-                  <span className='text-plum/70'>Tone Index:</span>
-                  <span className='font-bold text-plum'>{skinData?.tone || 'Analyzing...'}</span>
-                </div>
-                <div className='flex items-center justify-between rounded-xl bg-white p-2.5'>
-                  <span className='text-plum/70'>Surface Smoothness:</span>
-                  <span className='font-bold text-green-700'>{skinData?.smoothness || '88%'}</span>
-                </div>
-                <div className='flex items-center justify-between rounded-xl bg-white p-2.5'>
-                  <span className='text-plum/70'>T-Zone / Pores:</span>
-                  <span className='font-bold text-plum'>{skinData?.pores || 'Balanced'}</span>
-                </div>
-              </div>
-
-              {/* Primary Concern Selector */}
-              <h4 className='mt-4 font-display text-xs font-bold text-plum'>Target Skin Goal:</h4>
-              <div className='mt-2 flex flex-wrap gap-1.5'>
-                {CONCERNS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setConcern(c)}
-                    className={
-                      'rounded-full px-3 py-1 text-xs font-semibold transition ' +
-                      (concern === c ? 'bg-rose text-white' : 'border border-plum/20 bg-white hover:border-rose')
-                    }
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Routine summary */}
-            <div className='mt-4 rounded-xl border border-plum/10 bg-white p-3 text-xs'>
-              <p className='font-bold text-plum'>☀️ Recommended Routine for your scan:</p>
-              <p className='mt-1 text-plum/70'>
-                1. Gentle Cleanser → 2. Vitamin C / Niacinamide Serum → 3. Light Hydrating Moisturizer → 4. Broad Spectrum SPF 50.
+              <p className='mt-3 font-display text-lg font-semibold text-plum'>Camera is currently off</p>
+              <p className='mt-1 max-w-sm text-xs text-plum/70'>
+                Click "Start Live Skin Scan" above to activate your camera and perform facial structure & texture analysis.
               </p>
             </div>
+          )}
+
+          {active && skinData && (
+            <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
+              Skin Tone: {skinData.tone} · Tendency: {skinData.skinType}
+            </div>
+          )}
+        </div>
+
+        {/* Diagnostic Metrics Display */}
+        <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
+          <div>
+            <h3 className='font-display text-base font-bold text-plum'>Scanned Skin Metrics</h3>
+
+            <div className='mt-3 space-y-2.5 text-xs'>
+              <div className='flex items-center justify-between rounded-xl bg-white p-2.5 shadow-xs'>
+                <span className='text-plum/70'>Estimated Skin Profile:</span>
+                <span className='font-bold text-rose'>{skinData?.skinType || (active ? 'Analyzing...' : 'Ready to scan')}</span>
+              </div>
+              <div className='flex items-center justify-between rounded-xl bg-white p-2.5 shadow-xs'>
+                <span className='text-plum/70'>Tone Index:</span>
+                <span className='font-bold text-plum'>{skinData?.tone || (active ? 'Detecting...' : 'Ready')}</span>
+              </div>
+              <div className='flex items-center justify-between rounded-xl bg-white p-2.5 shadow-xs'>
+                <span className='text-plum/70'>Surface Radiance:</span>
+                <span className='font-bold text-green-700'>{skinData?.smoothness || (active ? 'Scanning...' : 'Ready')}</span>
+              </div>
+              <div className='flex items-center justify-between rounded-xl bg-white p-2.5 shadow-xs'>
+                <span className='text-plum/70'>T-Zone / Pores:</span>
+                <span className='font-bold text-plum'>{skinData?.pores || (active ? 'Assessing...' : 'Balanced')}</span>
+              </div>
+            </div>
+
+            {/* Primary Concern Selector */}
+            <h4 className='mt-4 font-display text-xs font-bold text-plum'>Target Skin Goal:</h4>
+            <div className='mt-2 flex flex-wrap gap-1.5'>
+              {CONCERNS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setConcern(c)}
+                  className={
+                    'rounded-full px-3 py-1 text-xs font-semibold transition ' +
+                    (concern === c ? 'bg-rose text-white shadow-xs' : 'border border-plum/20 bg-white hover:border-rose')
+                  }
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Routine summary */}
+          <div className='mt-4 rounded-xl border border-plum/10 bg-white p-3 text-xs'>
+            <p className='font-bold text-plum'>☀️ Recommended Routine for your scan:</p>
+            <p className='mt-1 text-plum/70 leading-relaxed'>
+              1. Gentle Cleanser → 2. Vitamin C / Niacinamide Serum → 3. Light Hydrating Moisturizer → 4. Broad Spectrum SPF 50.
+            </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

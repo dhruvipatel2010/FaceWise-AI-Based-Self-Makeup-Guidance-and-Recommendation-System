@@ -12,11 +12,13 @@ export default function MakeupScanner({ onDetected }) {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const landmarkerRef = useRef(null)
+  const filesetRef = useRef(null)
   const rafRef = useRef(0)
   const lastShapeAt = useRef(0)
 
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [faceShape, setFaceShape] = useState(null)
   const [skinTone, setSkinTone] = useState('')
@@ -48,33 +50,41 @@ export default function MakeupScanner({ onDetected }) {
   async function startCamera() {
     setError('')
     setLoading(true)
+    setStatus('Loading AI facial model...')
+
     try {
+      if (!filesetRef.current) {
+        filesetRef.current = await FilesetResolver.forVisionTasks(WASM_URL)
+      }
       if (!landmarkerRef.current) {
-        const vision = await FilesetResolver.forVisionTasks(WASM_URL)
-        landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
+        landmarkerRef.current = await FaceLandmarker.createFromOptions(filesetRef.current, {
           baseOptions: { modelAssetPath: FACE_MODEL },
           runningMode: 'VIDEO',
           numFaces: 1,
         })
       }
 
+      setStatus('Requesting camera access...')
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { facingMode: 'user' },
+        audio: false,
       })
       streamRef.current = stream
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play()
-          setActive(true)
-          setLoading(false)
-          loop()
-        }
+        await videoRef.current.play()
       }
+
+      setActive(true)
+      setLoading(false)
+      setStatus('')
+      rafRef.current = requestAnimationFrame(loop)
     } catch (err) {
       console.error(err)
-      setError('Camera access denied or device in use. Please allow camera permission.')
+      setError('Could not access camera. Please allow camera permissions and ensure no other app is using it.')
       setLoading(false)
+      setStatus('')
     }
   }
 
@@ -90,6 +100,7 @@ export default function MakeupScanner({ onDetected }) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
     }
     setActive(false)
+    setStatus('')
   }
 
   function loop() {
@@ -140,6 +151,7 @@ export default function MakeupScanner({ onDetected }) {
 
   return (
     <div className='overflow-hidden rounded-3xl border border-plum/10 bg-white p-6 shadow-sm'>
+      {/* Header */}
       <div className='flex flex-wrap items-center justify-between gap-4'>
         <div>
           <span className='rounded-full bg-rose/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-rose'>
@@ -158,9 +170,9 @@ export default function MakeupScanner({ onDetected }) {
             <button
               onClick={startCamera}
               disabled={loading}
-              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50'
+              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50'
             >
-              {loading ? 'Starting Camera...' : '📸 Open Camera & Try-On'}
+              {loading ? (status || 'Starting Camera...') : '📸 Start Live Makeup Try-On'}
             </button>
           ) : (
             <div className='flex gap-2'>
@@ -168,14 +180,14 @@ export default function MakeupScanner({ onDetected }) {
                 onClick={() => setTryOn(!tryOn)}
                 className={
                   'min-h-10 rounded-full px-5 text-sm font-semibold transition ' +
-                  (tryOn ? 'bg-rose text-white' : 'border border-plum/20 bg-page text-plum')
+                  (tryOn ? 'bg-rose text-white shadow-xs' : 'border border-plum/20 bg-page text-plum')
                 }
               >
                 {tryOn ? '✓ Makeup ON' : 'Makeup OFF'}
               </button>
               <button
                 onClick={stopCamera}
-                className='min-h-10 rounded-full border border-plum/30 px-5 text-sm font-semibold hover:bg-plum hover:text-white'
+                className='min-h-10 rounded-full border border-plum/30 px-5 text-sm font-semibold hover:bg-plum hover:text-white transition'
               >
                 Stop Camera
               </button>
@@ -184,77 +196,96 @@ export default function MakeupScanner({ onDetected }) {
         </div>
       </div>
 
-      {error && <p className='mt-4 font-semibold text-rose'>{error}</p>}
+      {status && <p className='mt-3 text-xs font-medium text-plum/70 animate-pulse'>{status}</p>}
+      {error && <p role='alert' className='mt-3 text-sm font-semibold text-rose'>{error}</p>}
 
-      {active && (
-        <div className='mt-6 grid gap-6 md:grid-cols-12'>
-          {/* Camera Viewport */}
-          <div className='relative overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
-            <video ref={videoRef} playsInline muted className='aspect-video w-full -scale-x-100 object-cover' />
-            <canvas ref={canvasRef} className='pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover' />
+      {/* Camera Viewport & Controls Grid - ALWAYS IN DOM so videoRef is never null */}
+      <div className='mt-6 grid gap-6 md:grid-cols-12'>
+        {/* Camera Viewport */}
+        <div className='relative aspect-video w-full overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className={'h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+          />
+          <canvas
+            ref={canvasRef}
+            className={'pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+          />
 
-            {skinTone && (
-              <div className='absolute bottom-3 left-3 rounded-full bg-plum/80 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
-                Detected: {skinTone} Tone · {faceShape?.shape} Face
+          {!active && (
+            <div className='flex h-full w-full flex-col items-center justify-center p-6 text-center text-plum/60'>
+              <div className='flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm'>
+                <span className='text-2xl'>💄</span>
               </div>
-            )}
-          </div>
+              <p className='mt-3 font-display text-lg font-semibold text-plum'>Camera is currently off</p>
+              <p className='mt-1 max-w-sm text-xs text-plum/70'>
+                Click "Start Live Makeup Try-On" above to activate your camera and preview shades directly on your face.
+              </p>
+            </div>
+          )}
 
-          {/* Real-time Makeup Controls */}
-          <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
-            <div>
-              <h3 className='font-display text-base font-bold text-plum'>Try Lipstick Shades</h3>
-              <p className='text-xs text-plum/60'>Click a shade to preview live on your lips:</p>
-              <div className='mt-2.5 flex flex-wrap gap-2'>
-                {Object.keys(LIP_COLORS).map((name) => (
-                  <button
-                    key={name}
-                    onClick={() => pickLip(name)}
-                    className={
-                      'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
-                      (selectedLip === name
-                        ? 'bg-rose text-white shadow-sm'
-                        : 'border border-plum/20 bg-white hover:border-rose')
-                    }
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+          {active && skinTone && (
+            <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
+              Detected: {skinTone} Tone · {faceShape?.shape} Face
+            </div>
+          )}
+        </div>
 
-              <h3 className='mt-5 font-display text-base font-bold text-plum'>Blush Shades</h3>
-              <p className='text-xs text-plum/60'>Matched to your {faceShape?.shape || 'face'} contour angle:</p>
-              <div className='mt-2.5 flex flex-wrap gap-2'>
-                {Object.keys(BLUSH_COLORS).map((name) => (
-                  <button
-                    key={name}
-                    onClick={() => pickBlush(name)}
-                    className={
-                      'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
-                      (selectedBlush === name
-                        ? 'bg-plum text-white shadow-sm'
-                        : 'border border-plum/20 bg-white hover:border-plum')
-                    }
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+        {/* Real-time Makeup Controls */}
+        <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
+          <div>
+            <h3 className='font-display text-base font-bold text-plum'>Try Lipstick Shades</h3>
+            <p className='text-xs text-plum/60'>Click a shade to preview live on your lips:</p>
+            <div className='mt-2.5 flex flex-wrap gap-2'>
+              {Object.keys(LIP_COLORS).map((name) => (
+                <button
+                  key={name}
+                  onClick={() => pickLip(name)}
+                  className={
+                    'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
+                    (selectedLip === name
+                      ? 'bg-rose text-white shadow-xs'
+                      : 'border border-plum/20 bg-white hover:border-rose')
+                  }
+                >
+                  {name}
+                </button>
+              ))}
             </div>
 
-            {skinTone && (
-              <div className='mt-5 rounded-xl border border-rose/20 bg-rose/5 p-3.5'>
-                <p className='text-xs font-bold text-rose'>💡 Real-time Beauty Guidance:</p>
-                <p className='mt-1 text-xs text-plum/80'>
-                  {skinTone === 'Light' && 'Peach and soft rose shades illuminate your fair complexion with a natural flush.'}
-                  {skinTone === 'Medium' && 'Warm berry, terracotta and nude tones create a radiant, sun-kissed balance.'}
-                  {skinTone === 'Deep' && 'Rich wine, ruby red, and plum tones create dramatic, gorgeous contrast.'}
-                </p>
-              </div>
-            )}
+            <h3 className='mt-5 font-display text-base font-bold text-plum'>Blush Placement</h3>
+            <p className='text-xs text-plum/60'>Angle optimized for {faceShape?.shape || 'your'} face structure:</p>
+            <div className='mt-2.5 flex flex-wrap gap-2'>
+              {Object.keys(BLUSH_COLORS).map((name) => (
+                <button
+                  key={name}
+                  onClick={() => pickBlush(name)}
+                  className={
+                    'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
+                    (selectedBlush === name
+                      ? 'bg-plum text-white shadow-xs'
+                      : 'border border-plum/20 bg-white hover:border-plum')
+                  }
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className='mt-5 rounded-xl border border-rose/20 bg-rose/5 p-3.5'>
+            <p className='text-xs font-bold text-rose'>💡 Real-time Beauty Guidance:</p>
+            <p className='mt-1 text-xs text-plum/80 leading-relaxed'>
+              {skinTone === 'Light' && 'Peach and soft rose shades illuminate your fair complexion with a natural flush.'}
+              {skinTone === 'Medium' && 'Warm berry, terracotta and nude tones create a radiant, sun-kissed balance.'}
+              {skinTone === 'Deep' && 'Rich wine, ruby red, and plum tones create dramatic, gorgeous contrast.'}
+              {!skinTone && 'Start the camera to detect your tone index and unlock personalized shade pairings.'}
+            </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

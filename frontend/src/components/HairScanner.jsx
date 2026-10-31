@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FaceLandmarker, ImageSegmenter, FilesetResolver } from '@mediapipe/tasks-vision'
 import { getFaceShape } from '../faceShape'
-import { suggestionsFor } from '../suggestions'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const FACE_MODEL =
@@ -61,6 +60,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
 
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [faceShape, setFaceShape] = useState(null)
   const [hairName, setHairName] = useState('Chocolate')
@@ -135,6 +135,8 @@ export default function HairScanner({ onFaceShapeDetected }) {
   async function startCamera() {
     setError('')
     setLoading(true)
+    setStatus('Loading AI face & hair models...')
+
     try {
       if (!filesetRef.current) {
         filesetRef.current = await FilesetResolver.forVisionTasks(WASM_URL)
@@ -155,23 +157,27 @@ export default function HairScanner({ onFaceShapeDetected }) {
         })
       }
 
+      setStatus('Requesting camera access...')
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { facingMode: 'user' },
+        audio: false,
       })
       streamRef.current = stream
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play()
-          setActive(true)
-          setLoading(false)
-          loop()
-        }
+        await videoRef.current.play()
       }
+
+      setActive(true)
+      setLoading(false)
+      setStatus('')
+      rafRef.current = requestAnimationFrame(loop)
     } catch (err) {
       console.error(err)
-      setError('Camera or AI model error. Please allow camera permissions.')
+      setError('Could not access camera. Please allow camera permissions and ensure no other app is using it.')
       setLoading(false)
+      setStatus('')
     }
   }
 
@@ -187,6 +193,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
     }
     setActive(false)
+    setStatus('')
   }
 
   function loop() {
@@ -236,6 +243,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
 
   return (
     <div className='overflow-hidden rounded-3xl border border-plum/10 bg-white p-6 shadow-sm'>
+      {/* Header */}
       <div className='flex flex-wrap items-center justify-between gap-4'>
         <div>
           <span className='rounded-full bg-rose/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-rose'>
@@ -254,14 +262,14 @@ export default function HairScanner({ onFaceShapeDetected }) {
             <button
               onClick={startCamera}
               disabled={loading}
-              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50'
+              className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50'
             >
-              {loading ? 'Starting Hair Engine...' : '💇 Open Camera & Hair Try-On'}
+              {loading ? (status || 'Starting Camera...') : '💇 Start Live Hair Scan'}
             </button>
           ) : (
             <button
               onClick={stopCamera}
-              className='min-h-10 rounded-full border border-plum/30 px-6 text-sm font-semibold hover:bg-plum hover:text-white'
+              className='min-h-10 rounded-full border border-plum/30 px-6 text-sm font-semibold hover:bg-plum hover:text-white transition'
             >
               Stop Camera
             </button>
@@ -269,75 +277,95 @@ export default function HairScanner({ onFaceShapeDetected }) {
         </div>
       </div>
 
-      {error && <p className='mt-4 font-semibold text-rose'>{error}</p>}
+      {status && <p className='mt-3 text-xs font-medium text-plum/70 animate-pulse'>{status}</p>}
+      {error && <p role='alert' className='mt-3 text-sm font-semibold text-rose'>{error}</p>}
 
-      {active && (
-        <div className='mt-6 grid gap-6 md:grid-cols-12'>
-          {/* Camera Viewport */}
-          <div className='relative overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
-            <video ref={videoRef} playsInline muted className='aspect-video w-full -scale-x-100 object-cover' />
-            <canvas ref={canvasRef} className='pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover' />
+      {/* Camera Viewport & Controls Grid - ALWAYS IN DOM */}
+      <div className='mt-6 grid gap-6 md:grid-cols-12'>
+        {/* Camera Viewport */}
+        <div className='relative aspect-video w-full overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className={'h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+          />
+          <canvas
+            ref={canvasRef}
+            className={'pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover ' + (!active ? 'hidden' : 'block')}
+          />
 
-            {faceShape && (
-              <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
-                Face Shape: {faceShape.shape} (Ratio: {faceShape.ratio})
+          {!active && (
+            <div className='flex h-full w-full flex-col items-center justify-center p-6 text-center text-plum/60'>
+              <div className='flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm'>
+                <span className='text-2xl'>💇</span>
               </div>
-            )}
-          </div>
+              <p className='mt-3 font-display text-lg font-semibold text-plum'>Camera is currently off</p>
+              <p className='mt-1 max-w-sm text-xs text-plum/70'>
+                Click "Start Live Hair Scan" above to activate your camera and preview hair colors & face-shape haircuts in real-time.
+              </p>
+            </div>
+          )}
 
-          {/* Hair Color & Haircut Selector */}
-          <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
-            <div>
-              <h3 className='font-display text-base font-bold text-plum'>Try Hair Colors Live</h3>
-              <p className='text-xs text-plum/60'>Select a tone to tint your real hair on camera:</p>
-              <div className='mt-2.5 flex flex-wrap gap-2'>
-                {Object.keys(HAIR_COLORS).map((name) => (
-                  <button
-                    key={name}
-                    onClick={() => pickHair(name)}
-                    className={
-                      'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
-                      (hairName === name
-                        ? 'bg-rose text-white shadow-sm'
-                        : 'border border-plum/20 bg-white hover:border-rose')
-                    }
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+          {active && faceShape && (
+            <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
+              Face Shape: {faceShape.shape} (Ratio: {faceShape.ratio})
+            </div>
+          )}
+        </div>
 
-              <h3 className='mt-5 font-display text-base font-bold text-plum'>
-                Haircut Recommendations for {faceShape?.shape || 'Oval'}
-              </h3>
-              <div className='mt-2 space-y-2'>
-                {haircuts.map((cut) => (
-                  <div
-                    key={cut.name}
-                    onClick={() => setActiveCut(cut.name)}
-                    className={
-                      'cursor-pointer rounded-xl border p-2.5 transition ' +
-                      (activeCut === cut.name
-                        ? 'border-rose bg-rose/10'
-                        : 'border-plum/10 bg-white hover:border-plum/30')
-                    }
-                  >
-                    <div className='flex items-center justify-between'>
-                      <p className='text-xs font-bold text-plum'>{cut.name}</p>
-                      <span className='rounded-full bg-lilac px-2 py-0.5 text-[10px] font-semibold text-plum'>Best Match</span>
-                    </div>
-                    <p className='mt-0.5 text-[11px] text-plum/70'>{cut.desc}</p>
-                  </div>
-                ))}
-              </div>
+        {/* Hair Color & Haircut Selector */}
+        <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
+          <div>
+            <h3 className='font-display text-base font-bold text-plum'>Try Hair Colors Live</h3>
+            <p className='text-xs text-plum/60'>Select a tone to tint your real hair on camera:</p>
+            <div className='mt-2.5 flex flex-wrap gap-2'>
+              {Object.keys(HAIR_COLORS).map((name) => (
+                <button
+                  key={name}
+                  onClick={() => pickHair(name)}
+                  className={
+                    'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
+                    (hairName === name
+                      ? 'bg-rose text-white shadow-xs'
+                      : 'border border-plum/20 bg-white hover:border-rose')
+                  }
+                >
+                  {name}
+                </button>
+              ))}
             </div>
 
-            <p className='mt-4 text-[11px] text-plum/60'>
-              💡 Hair colors are blended live on your camera stream using AI segmentation.
-            </p>
+            <h3 className='mt-5 font-display text-base font-bold text-plum'>
+              Haircuts for {faceShape?.shape || 'your Face Shape'}
+            </h3>
+            <div className='mt-2 space-y-2'>
+              {haircuts.map((cut) => (
+                <div
+                  key={cut.name}
+                  onClick={() => setActiveCut(cut.name)}
+                  className={
+                    'cursor-pointer rounded-xl border p-2.5 transition ' +
+                    (activeCut === cut.name
+                      ? 'border-rose bg-rose/10'
+                      : 'border-plum/10 bg-white hover:border-plum/30')
+                  }
+                >
+                  <div className='flex items-center justify-between'>
+                    <p className='text-xs font-bold text-plum'>{cut.name}</p>
+                    <span className='rounded-full bg-lilac px-2 py-0.5 text-[10px] font-semibold text-plum'>Best Match</span>
+                  </div>
+                  <p className='mt-0.5 text-[11px] text-plum/70'>{cut.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
+
+          <p className='mt-4 text-[11px] text-plum/60 leading-relaxed'>
+            💡 Hair colors are blended live on your real camera stream using AI segmentation.
+          </p>
         </div>
-      )}
+      </div>
     </div>
   )
 }
