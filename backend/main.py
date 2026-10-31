@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import client
-from backend.routers import auth, products
+from backend.routers import auth, products, scans, admin as admin_router
 
 app = FastAPI(title='FaceWise API')
 app.add_middleware(
@@ -13,6 +13,8 @@ app.add_middleware(
 )
 app.include_router(auth.router)
 app.include_router(products.router)
+app.include_router(scans.router)
+app.include_router(admin_router.router)
 
 
 @app.get('/')

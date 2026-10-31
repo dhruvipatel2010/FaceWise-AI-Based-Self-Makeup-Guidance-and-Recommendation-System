@@ -44,3 +44,31 @@ def add_product(data: ProductIn, admin=Depends(require_admin)):
         raise HTTPException(400, 'Category must be makeup, skincare or hair')
     result = db.products.insert_one(data.model_dump())
     return {'id': str(result.inserted_id)}
+
+
+@router.put('/{product_id}')
+def update_product(product_id: str, data: ProductIn, admin=Depends(require_admin)):
+    """Update an existing product (admin only)."""
+    try:
+        oid = ObjectId(product_id)
+    except Exception:
+        raise HTTPException(400, 'Invalid id')
+    if data.category not in CATEGORIES:
+        raise HTTPException(400, 'Unknown category')
+    result = db.products.update_one({'_id': oid}, {'$set': data.model_dump()})
+    if not result.matched_count:
+        raise HTTPException(404, 'Product not found')
+    return {'message': 'Updated'}
+
+
+@router.delete('/{product_id}')
+def delete_product(product_id: str, admin=Depends(require_admin)):
+    """Delete a product (admin only)."""
+    try:
+        oid = ObjectId(product_id)
+    except Exception:
+        raise HTTPException(400, 'Invalid id')
+    result = db.products.delete_one({'_id': oid})
+    if not result.deleted_count:
+        raise HTTPException(404, 'Product not found')
+    return {'message': 'Deleted'}
