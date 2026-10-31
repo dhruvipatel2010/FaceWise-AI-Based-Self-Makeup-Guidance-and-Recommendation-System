@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FaceLandmarker, ImageSegmenter, FilesetResolver } from '@mediapipe/tasks-vision'
 import { getFaceShape } from '../faceShape'
+import { drawHaircut } from '../haircutOverlay'
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const FACE_MODEL =
@@ -25,24 +26,24 @@ const HAIRCUT_PREVIEWS = {
     { name: 'Side-Swept Fringe', desc: 'Softens the forehead line gracefully' },
   ],
   Round: [
-    { name: 'Angled Lob (Long Bob)', desc: 'Elongates the jawline and creates vertical balance' },
-    { name: 'Long Waves with Crown Volume', desc: 'Adds height to slim round cheeks' },
+    { name: 'Angled Lob', desc: 'Elongates the jawline and creates vertical balance' },
+    { name: 'Long Waves', desc: 'Adds height to slim round cheeks' },
     { name: 'Curtain Bangs', desc: 'Frames the sides to narrow face width' },
   ],
   Square: [
-    { name: 'Soft Textured Waves', desc: 'Softens strong jaw corners and adds flow' },
-    { name: 'Wispy Fringe', desc: 'Breaks up sharp angles gently' },
-    { name: 'Side-Parted Collarbone Cut', desc: 'Creates diagonal slimming lines' },
+    { name: 'Soft Waves', desc: 'Softens strong jaw corners and adds flow' },
+    { name: 'Side-Swept Fringe', desc: 'Breaks up sharp angles gently' },
+    { name: 'Long Layers', desc: 'Creates diagonal slimming lines' },
   ],
   Heart: [
     { name: 'Chin-Length Bob', desc: 'Adds fullness around the narrower jaw and chin' },
-    { name: 'Side-Swept Pixie', desc: 'Balances wider forehead with textured sides' },
-    { name: 'Shoulder Length with Curtain Bangs', desc: 'Draws focus to eyes and lips' },
+    { name: 'Curtain Bangs', desc: 'Draws focus to eyes and lips' },
+    { name: 'Pixie Cut', desc: 'Balances wider forehead with textured sides' },
   ],
   Oblong: [
-    { name: 'Volume Bob with Full Fringe', desc: 'Shortens face length and widens cheek area' },
-    { name: 'Bouncy Waves with Side Part', desc: 'Adds width rather than height' },
-    { name: 'Blunt Bangs with Medium Layers', desc: 'Frames face horizontally' },
+    { name: 'Layered Bob', desc: 'Shortens face length and widens cheek area' },
+    { name: 'Side-Swept Fringe', desc: 'Adds width rather than height' },
+    { name: 'Curtain Bangs', desc: 'Frames face horizontally' },
   ],
 }
 
@@ -64,12 +65,25 @@ export default function HairScanner({ onFaceShapeDetected }) {
   const [error, setError] = useState('')
   const [faceShape, setFaceShape] = useState(null)
   const [hairName, setHairName] = useState('Chocolate')
-  const [activeCut, setActiveCut] = useState(null)
+  const [activeCut, setActiveCut] = useState('Layered Bob')
+  const [showCutOverlay, setShowCutOverlay] = useState(true)
 
   const hairRef = useRef(HAIR_COLORS['Chocolate'])
+  const hairNameRef = useRef('Chocolate')
+  const activeCutRef = useRef('Layered Bob')
+  const showCutOverlayRef = useRef(true)
+
+  useEffect(() => {
+    activeCutRef.current = activeCut
+  }, [activeCut])
+
+  useEffect(() => {
+    showCutOverlayRef.current = showCutOverlay
+  }, [showCutOverlay])
 
   async function pickHair(name) {
     setHairName(name)
+    hairNameRef.current = name
     hairRef.current = HAIR_COLORS[name]
     if (!HAIR_COLORS[name]) {
       hairMaskRef.current = null
@@ -222,12 +236,18 @@ export default function HairScanner({ onFaceShapeDetected }) {
           if (onFaceShapeDetected) onFaceShapeDetected(s)
         }
 
+        // 1. Live hair color tint via segmentation
         if (hairRef.current && segmenterRef.current) {
           frameRef.current++
           if (frameRef.current % 2 === 0) {
             segmenterRef.current.segmentForVideo(video, performance.now(), updateMask)
           }
           paintHair(ctx, w, h)
+        }
+
+        // 2. Live realistic haircut styling overlay
+        if (showCutOverlayRef.current && activeCutRef.current) {
+          drawHaircut(ctx, lm, w, h, activeCutRef.current, hairNameRef.current)
         }
       }
     }
@@ -250,10 +270,10 @@ export default function HairScanner({ onFaceShapeDetected }) {
             AI Face Shape & Hair Try-On
           </span>
           <h2 className='mt-2 font-display text-2xl font-bold text-plum'>
-            Live Face Shape Haircut & Color Preview
+            Live Face Shape Haircut & Color Camera Preview
           </h2>
           <p className='text-sm text-plum/70'>
-            Measure your face shape live on camera, recolor your hair in real-time, and get haircut recommendations that balance your facial proportions.
+            Measure your face shape live on camera, recolor your hair in real-time, and preview haircuts rendered directly over your face.
           </p>
         </div>
 
@@ -264,15 +284,26 @@ export default function HairScanner({ onFaceShapeDetected }) {
               disabled={loading}
               className='min-h-11 rounded-full bg-rose px-7 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50'
             >
-              {loading ? (status || 'Starting Camera...') : '💇 Start Live Hair Scan'}
+              {loading ? (status || 'Starting Camera...') : '💇 Start Live Haircut & Color Scan'}
             </button>
           ) : (
-            <button
-              onClick={stopCamera}
-              className='min-h-10 rounded-full border border-plum/30 px-6 text-sm font-semibold hover:bg-plum hover:text-white transition'
-            >
-              Stop Camera
-            </button>
+            <div className='flex gap-2'>
+              <button
+                onClick={() => setShowCutOverlay(!showCutOverlay)}
+                className={
+                  'min-h-10 rounded-full px-5 text-sm font-semibold transition ' +
+                  (showCutOverlay ? 'bg-rose text-white shadow-xs' : 'border border-plum/20 bg-page text-plum')
+                }
+              >
+                {showCutOverlay ? '✓ Haircut Overlay ON' : 'Haircut Overlay OFF'}
+              </button>
+              <button
+                onClick={stopCamera}
+                className='min-h-10 rounded-full border border-plum/30 px-5 text-sm font-semibold hover:bg-plum hover:text-white transition'
+              >
+                Stop Camera
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -280,7 +311,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
       {status && <p className='mt-3 text-xs font-medium text-plum/70 animate-pulse'>{status}</p>}
       {error && <p role='alert' className='mt-3 text-sm font-semibold text-rose'>{error}</p>}
 
-      {/* Camera Viewport & Controls Grid - ALWAYS IN DOM */}
+      {/* Camera Viewport & Controls Grid */}
       <div className='mt-6 grid gap-6 md:grid-cols-12'>
         {/* Camera Viewport */}
         <div className='relative aspect-video w-full overflow-hidden rounded-2xl bg-lilac md:col-span-7'>
@@ -302,14 +333,14 @@ export default function HairScanner({ onFaceShapeDetected }) {
               </div>
               <p className='mt-3 font-display text-lg font-semibold text-plum'>Camera is currently off</p>
               <p className='mt-1 max-w-sm text-xs text-plum/70'>
-                Click "Start Live Hair Scan" above to activate your camera and preview hair colors & face-shape haircuts in real-time.
+                Click "Start Live Haircut & Color Scan" to test realistic haircuts and tints live on your real face.
               </p>
             </div>
           )}
 
           {active && faceShape && (
             <div className='absolute bottom-3 left-3 rounded-full bg-plum/85 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur'>
-              Face Shape: {faceShape.shape} (Ratio: {faceShape.ratio})
+              Detected: {faceShape.shape} Face · Style: {activeCut}
             </div>
           )}
         </div>
@@ -317,8 +348,8 @@ export default function HairScanner({ onFaceShapeDetected }) {
         {/* Hair Color & Haircut Selector */}
         <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
           <div>
-            <h3 className='font-display text-base font-bold text-plum'>Try Hair Colors Live</h3>
-            <p className='text-xs text-plum/60'>Select a tone to tint your real hair on camera:</p>
+            <h3 className='font-display text-base font-bold text-plum'>1. Live Hair Colors</h3>
+            <p className='text-xs text-plum/60'>Recolor your hair live in the camera stream:</p>
             <div className='mt-2.5 flex flex-wrap gap-2'>
               {Object.keys(HAIR_COLORS).map((name) => (
                 <button
@@ -337,23 +368,29 @@ export default function HairScanner({ onFaceShapeDetected }) {
             </div>
 
             <h3 className='mt-5 font-display text-base font-bold text-plum'>
-              Haircuts for {faceShape?.shape || 'your Face Shape'}
+              2. Haircuts for {faceShape?.shape || 'Balanced Facial Proportions'}
             </h3>
-            <div className='mt-2 space-y-2'>
+            <p className='text-xs text-plum/60'>Click any cut to preview live on your head:</p>
+            <div className='mt-2.5 space-y-2'>
               {haircuts.map((cut) => (
                 <div
                   key={cut.name}
-                  onClick={() => setActiveCut(cut.name)}
+                  onClick={() => {
+                    setActiveCut(cut.name)
+                    setShowCutOverlay(true)
+                  }}
                   className={
                     'cursor-pointer rounded-xl border p-2.5 transition ' +
                     (activeCut === cut.name
-                      ? 'border-rose bg-rose/10'
+                      ? 'border-rose bg-rose/10 shadow-xs ring-1 ring-rose/30'
                       : 'border-plum/10 bg-white hover:border-plum/30')
                   }
                 >
                   <div className='flex items-center justify-between'>
                     <p className='text-xs font-bold text-plum'>{cut.name}</p>
-                    <span className='rounded-full bg-lilac px-2 py-0.5 text-[10px] font-semibold text-plum'>Best Match</span>
+                    <span className='rounded-full bg-lilac px-2 py-0.5 text-[10px] font-semibold text-plum'>
+                      {activeCut === cut.name ? '★ Live on Camera' : 'Try Cut'}
+                    </span>
                   </div>
                   <p className='mt-0.5 text-[11px] text-plum/70'>{cut.desc}</p>
                 </div>
@@ -362,7 +399,7 @@ export default function HairScanner({ onFaceShapeDetected }) {
           </div>
 
           <p className='mt-4 text-[11px] text-plum/60 leading-relaxed'>
-            💡 Hair colors are blended live on your real camera stream using AI segmentation.
+            💡 Haircuts dynamically anchor to your facial contours and move with your head tilt.
           </p>
         </div>
       </div>
