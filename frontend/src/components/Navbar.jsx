@@ -19,8 +19,8 @@ export default function Navbar() {
       : 'text-plum/80 hover:text-rose hover:bg-rose/5')
 
   return (
-    <header className='sticky top-0 z-50 border-b border-plum/10 bg-page/90 backdrop-blur-md'>
-      <div className='mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-4 md:px-12 lg:px-16'>
+    <header className='sticky top-0 z-50 w-full border-b border-plum/10 bg-page/90 backdrop-blur-md'>
+      <div className='w-full flex flex-wrap items-center justify-between gap-4 px-4 sm:px-6 md:px-10 py-3.5'>
         {/* Brand Logo */}
         <Link to={token ? '/' : '/login'} className='flex items-center gap-2.5 group'>
           <div className='flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-rose to-plum text-white shadow-sm transition-transform duration-300 group-hover:scale-105'>

@@ -49,7 +49,7 @@ export default function Home() {
         <div className='pointer-events-none absolute -top-24 left-1/4 h-96 w-96 rounded-full bg-rose/15 blur-3xl'></div>
         <div className='pointer-events-none absolute -top-10 right-10 h-80 w-80 rounded-full bg-plum/10 blur-3xl'></div>
 
-        <div className='mx-auto max-w-[1600px] px-6 md:px-12 lg:px-16'>
+        <div className='w-full px-4 sm:px-6 md:px-10'>
           <div className='grid items-center gap-12 lg:grid-cols-12'>
             {/* Left Column: Headline & Action */}
             <div className='lg:col-span-7'>
@@ -148,7 +148,7 @@ export default function Home() {
 
       {/* ── Statistics / Proof Bar ──────────────────────────────────── */}
       <section className='border-y border-plum/10 bg-white py-10'>
-        <div className='mx-auto grid max-w-[1600px] grid-cols-2 gap-8 px-6 text-center md:grid-cols-4 md:px-12 lg:px-16'>
+        <div className='w-full grid grid-cols-2 gap-8 px-4 sm:px-6 md:px-10 text-center md:grid-cols-4'>
           {stats.map((s) => (
             <div key={s.label}>
               <p className='font-display text-3xl md:text-4xl font-bold text-rose'>{s.value}</p>
@@ -160,7 +160,7 @@ export default function Home() {
 
       {/* ── Three Category Exploration Cards (Full-Width Responsive) ── */}
       <section className='py-16 md:py-24'>
-        <div className='mx-auto max-w-[1600px] px-6 md:px-12 lg:px-16'>
+        <div className='w-full px-4 sm:px-6 md:px-10'>
           <div className='flex flex-wrap items-end justify-between gap-4'>
             <div>
               <span className='text-xs font-bold uppercase tracking-wider text-rose'>
@@ -222,7 +222,7 @@ export default function Home() {
 
       {/* ── 4-Step How It Works Section ────────────────────────────── */}
       <section className='bg-lilac/40 border-t border-plum/10 py-16 md:py-24'>
-        <div className='mx-auto max-w-[1600px] px-6 md:px-12 lg:px-16'>
+        <div className='w-full px-4 sm:px-6 md:px-10'>
           <div className='text-center'>
             <span className='text-xs font-bold uppercase tracking-wider text-rose'>
               Effortless Workflow

@@ -18,9 +18,9 @@ export default function Layout() {
       {/* Floating AI Beauty Advisor Popup (Available when authenticated) */}
       {token && <AIChatBotPopup />}
 
-      {/* Aesthetic Luxury Beauty Footer */}
-      <footer className='border-t border-plum/10 bg-white py-12 mt-16'>
-        <div className='mx-auto max-w-[1600px] px-6 md:px-12 lg:px-16'>
+      {/* Aesthetic Luxury Beauty Footer (Full-Screen Responsive) */}
+      <footer className='w-full border-t border-plum/10 bg-white py-10 mt-16'>
+        <div className='w-full px-4 sm:px-6 md:px-10'>
           <div className='flex flex-wrap items-center justify-between gap-6'>
             <div>
               <div className='flex items-center gap-2'>
