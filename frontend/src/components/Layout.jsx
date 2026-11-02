@@ -1,5 +1,6 @@
 import { Outlet, Link } from 'react-router-dom'
 import Navbar from './Navbar'
+import AIChatBotPopup from './AIChatBotPopup'
 
 export default function Layout() {
   return (
@@ -10,6 +11,9 @@ export default function Layout() {
       <div className='flex-1 w-full'>
         <Outlet />
       </div>
+
+      {/* Floating AI Beauty Advisor Popup (Available in all sections) */}
+      <AIChatBotPopup />
 
       {/* Aesthetic Luxury Beauty Footer */}
       <footer className='border-t border-plum/10 bg-white py-12 mt-16'>
