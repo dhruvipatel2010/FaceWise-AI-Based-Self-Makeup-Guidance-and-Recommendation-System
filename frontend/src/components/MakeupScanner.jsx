@@ -27,6 +27,26 @@ export default function MakeupScanner({ onDetected }) {
   const [selectedLip, setSelectedLip] = useState('Berry Velvet')
   const [selectedBlush, setSelectedBlush] = useState('Rose Petal')
 
+  // AI Recommended Makeup mapping based on detected tone & face structure
+  const AI_LIP_RECOMMENDATIONS = {
+    Light: ['Soft Rose', 'Coral Peach'],
+    Medium: ['Berry Velvet', 'Warm Nude'],
+    Deep: ['Ruby Red', 'Plum Wine'],
+  }
+
+  const AI_BLUSH_RECOMMENDATIONS = {
+    Round: { shade: 'Rose Petal', technique: 'Angled high-temple lift (slims & elongates cheeks)' },
+    Square: { shade: 'Peachy Glow', technique: 'Soft circular apples (diffuses sharp jaw angles)' },
+    Heart: { shade: 'Soft Berry', technique: 'Mid-cheek horizontal blend (balances chin & forehead)' },
+    Oblong: { shade: 'Coral Sun', technique: 'Horizontal cheekbone sweep (shortens visual length)' },
+    Oval: { shade: 'Rose Petal', technique: 'Classic cheekbone contour (enhances natural symmetry)' },
+  }
+
+  const currentToneKey = skinTone || 'Medium'
+  const recommendedLips = AI_LIP_RECOMMENDATIONS[currentToneKey] || AI_LIP_RECOMMENDATIONS.Medium
+  const currentShapeKey = faceShape?.shape || 'Oval'
+  const blushAdvice = AI_BLUSH_RECOMMENDATIONS[currentShapeKey] || AI_BLUSH_RECOMMENDATIONS.Oval
+
   const tryOnRef = useRef(true)
   const lipRef = useRef(LIP_COLORS['Berry Velvet'])
   const blushRef = useRef(BLUSH_COLORS['Rose Petal'])
@@ -236,52 +256,85 @@ export default function MakeupScanner({ onDetected }) {
         {/* Real-time Makeup Controls */}
         <div className='flex flex-col justify-between rounded-2xl border border-plum/10 bg-page p-5 md:col-span-5'>
           <div>
-            <h3 className='font-display text-base font-bold text-plum'>Try Lipstick Shades</h3>
-            <p className='text-xs text-plum/60'>Click a shade to preview live on your lips:</p>
+            <div className='flex items-center justify-between'>
+              <h3 className='font-display text-base font-bold text-plum'>Try Lipstick Shades</h3>
+              <span className='text-[10px] font-bold text-rose bg-rose/10 px-2 py-0.5 rounded-full'>
+                {currentToneKey} Tone Match
+              </span>
+            </div>
+            <p className='text-xs text-plum/60 mt-0.5'>Click a shade to preview live on your lips:</p>
             <div className='mt-2.5 flex flex-wrap gap-2'>
-              {Object.keys(LIP_COLORS).map((name) => (
-                <button
-                  key={name}
-                  onClick={() => pickLip(name)}
-                  className={
-                    'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
-                    (selectedLip === name
-                      ? 'bg-rose text-white shadow-xs'
-                      : 'border border-plum/20 bg-white hover:border-rose')
-                  }
-                >
-                  {name}
-                </button>
-              ))}
+              {Object.keys(LIP_COLORS).map((name) => {
+                const isRecommended = recommendedLips.includes(name)
+                const isSelected = selectedLip === name
+
+                return (
+                  <button
+                    key={name}
+                    onClick={() => pickLip(name)}
+                    className={
+                      'min-h-8 rounded-full px-3.5 text-xs font-semibold transition flex items-center gap-1 ' +
+                      (isSelected
+                        ? 'bg-rose text-white shadow-xs'
+                        : isRecommended
+                        ? 'border-2 border-rose/60 bg-rose/5 text-rose font-bold hover:bg-rose/10'
+                        : 'border border-plum/20 bg-white hover:border-rose text-plum/80')
+                    }
+                  >
+                    {isRecommended && <span className='text-[10px]'>⭐</span>}
+                    {name}
+                  </button>
+                )
+              })}
             </div>
 
-            <h3 className='mt-5 font-display text-base font-bold text-plum'>Blush Placement</h3>
-            <p className='text-xs text-plum/60'>Angle optimized for {faceShape?.shape || 'your'} face structure:</p>
+            <div className='mt-5 flex items-center justify-between'>
+              <h3 className='font-display text-base font-bold text-plum'>Blush Placement</h3>
+              <span className='text-[10px] font-bold text-plum/70 bg-plum/5 px-2 py-0.5 rounded-full'>
+                {currentShapeKey} Contour
+              </span>
+            </div>
+            <p className='text-xs text-plum/60 mt-0.5'>Technique: {blushAdvice.technique}</p>
             <div className='mt-2.5 flex flex-wrap gap-2'>
-              {Object.keys(BLUSH_COLORS).map((name) => (
-                <button
-                  key={name}
-                  onClick={() => pickBlush(name)}
-                  className={
-                    'min-h-8 rounded-full px-3.5 text-xs font-semibold transition ' +
-                    (selectedBlush === name
-                      ? 'bg-plum text-white shadow-xs'
-                      : 'border border-plum/20 bg-white hover:border-plum')
-                  }
-                >
-                  {name}
-                </button>
-              ))}
+              {Object.keys(BLUSH_COLORS).map((name) => {
+                const isRec = blushAdvice.shade === name
+                const isSelected = selectedBlush === name
+
+                return (
+                  <button
+                    key={name}
+                    onClick={() => pickBlush(name)}
+                    className={
+                      'min-h-8 rounded-full px-3.5 text-xs font-semibold transition flex items-center gap-1 ' +
+                      (isSelected
+                        ? 'bg-plum text-white shadow-xs'
+                        : isRec
+                        ? 'border-2 border-plum/60 bg-plum/5 text-plum font-bold'
+                        : 'border border-plum/20 bg-white hover:border-plum text-plum/80')
+                    }
+                  >
+                    {isRec && <span className='text-[10px]'>⭐</span>}
+                    {name}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           <div className='mt-5 rounded-xl border border-rose/20 bg-rose/5 p-3.5'>
-            <p className='text-xs font-bold text-rose'>💡 Real-time Beauty Guidance:</p>
+            <p className='text-xs font-bold text-rose'>💡 AI Makeup & Facial Balance Guidance:</p>
             <p className='mt-1 text-xs text-plum/80 leading-relaxed'>
-              {skinTone === 'Light' && 'Peach and soft rose shades illuminate your fair complexion with a natural flush.'}
-              {skinTone === 'Medium' && 'Warm berry, terracotta and nude tones create a radiant, sun-kissed balance.'}
-              {skinTone === 'Deep' && 'Rich wine, ruby red, and plum tones create dramatic, gorgeous contrast.'}
-              {!skinTone && 'Start the camera to detect your tone index and unlock personalized shade pairings.'}
+              {faceShape && skinTone ? (
+                <>
+                  For your <strong>{skinTone} complexion</strong> and <strong>{faceShape.shape} facial geometry</strong>:
+                  {' '}{skinTone === 'Light' && 'soft rose & coral lips provide natural vibrancy.'}
+                  {skinTone === 'Medium' && 'warm berry & terracotta shades give an effortless glowing warmth.'}
+                  {skinTone === 'Deep' && 'deep ruby & plum wine shades offer high-contrast elegance.'}
+                  {' '}Blush is placed using {blushAdvice.technique.toLowerCase()}.
+                </>
+              ) : (
+                'Start the camera to detect your facial contours & skin tone index to unlock your customized shade pairings.'
+              )}
             </p>
           </div>
         </div>

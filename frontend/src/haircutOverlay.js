@@ -202,6 +202,122 @@ export function eraseRealHair(ctx, maskData, maskW, maskH, canvasW, canvasH) {
 }
 
 /**
+ * Realistic Live Hair Recoloring on User's ACTUAL Hair
+ * Uses MediaPipe segmentation mask to tint real hair strands on canvas.
+ * Looks 100% natural because it recolors real hair texture, not an overlay wig.
+ */
+export function tintRealHair(ctx, maskData, maskW, maskH, canvasW, canvasH, colorName) {
+  if (!ctx || !maskData || !colorName || colorName === 'Natural') return
+  const rgb = HAIR_COLORS_RGB[colorName]
+  if (!rgb) return
+
+  try {
+    const hairCanvas = document.createElement('canvas')
+    hairCanvas.width = canvasW
+    hairCanvas.height = canvasH
+    const hctx = hairCanvas.getContext('2d')
+
+    const scaleX = canvasW / maskW
+    const scaleY = canvasH / maskH
+    const hairImgData = hctx.createImageData(canvasW, canvasH)
+    const hd = hairImgData.data
+
+    for (let my = 0; my < maskH; my++) {
+      for (let mx = 0; mx < maskW; mx++) {
+        const maskIdx = my * maskW + mx
+        if (maskData[maskIdx] === 1) { // 1 = hair
+          const cx1 = Math.floor(mx * scaleX)
+          const cy1 = Math.floor(my * scaleY)
+          const cx2 = Math.ceil((mx + 1) * scaleX)
+          const cy2 = Math.ceil((my + 1) * scaleY)
+
+          for (let cy = cy1; cy < cy2 && cy < canvasH; cy++) {
+            for (let cx = cx1; cx < cx2 && cx < canvasW; cx++) {
+              const pidx = (cy * canvasW + cx) * 4
+              hd[pidx] = rgb[0]
+              hd[pidx + 1] = rgb[1]
+              hd[pidx + 2] = rgb[2]
+              hd[pidx + 3] = 190
+            }
+          }
+        }
+      }
+    }
+
+    hctx.putImageData(hairImgData, 0, 0)
+
+    // Blend color mode for natural hair texture illumination
+    ctx.save()
+    ctx.globalCompositeOperation = 'color'
+    ctx.filter = 'blur(3px)'
+    ctx.drawImage(hairCanvas, 0, 0)
+    ctx.restore()
+
+    // Soft-light highlight for silky sheen
+    ctx.save()
+    ctx.globalCompositeOperation = 'soft-light'
+    ctx.globalAlpha = 0.35
+    ctx.filter = 'blur(4px)'
+    ctx.drawImage(hairCanvas, 0, 0)
+    ctx.restore()
+  } catch (e) {
+    // skip on canvas access errors
+  }
+}
+
+// ── AI Rules for Haircuts & Hair Colors based on Facial Structure & Skin Tone ──
+export const HAIRCUT_RECOMMENDATIONS = {
+  Oval: {
+    bestCuts: ['Layered Bob', 'Long Waves', 'Curtain Bangs'],
+    headline: 'Versatile Symmetry',
+    advice: 'Your balanced oval proportions flatter nearly every silhouette. Soft curtain layers and classic bobs accentuate your natural cheekbones.',
+    tip: 'Avoid excessive vertical volume that may over-elongate.',
+  },
+  Round: {
+    bestCuts: ['Long Waves', 'Angled Lob', 'Pixie Cut'],
+    headline: 'Elongating & Slimming',
+    advice: 'Long cascading waves or an asymmetrical angled lob draw the eye downward, creating an elegant slimming contour along your jawline.',
+    tip: 'Avoid chin-length blunt cuts that add width at the cheeks.',
+  },
+  Square: {
+    bestCuts: ['Curtain Bangs', 'Long Waves', 'Angled Lob'],
+    headline: 'Softening Angular Jawlines',
+    advice: 'Curtain bangs and soft textured waves frame and diffuse sharp angles, creating a gentle feminine balance around the jaw.',
+    tip: 'Avoid sharp geometric bobs that emphasize square angles.',
+  },
+  Heart: {
+    bestCuts: ['Layered Bob', 'Curtain Bangs', 'Soft Waves'],
+    headline: 'Balancing Forehead & Chin',
+    advice: 'A textured bob or collarbone lob adds width around the jawline, creating harmony with a wider forehead.',
+    tip: 'Avoid tight slicked-back styles that expose the forehead.',
+  },
+  Oblong: {
+    bestCuts: ['Curtain Bangs', 'Layered Bob', 'Soft Waves'],
+    headline: 'Adding Horizontal Harmony',
+    advice: 'Face-framing bangs and layered bobs shorten perceived vertical length and add flattering fullness across the mid-face.',
+    tip: 'Avoid ultra-long straight center-part hair that pulls the face down.',
+  },
+}
+
+export const HAIR_COLOR_RECOMMENDATIONS = {
+  Light: {
+    bestColors: ['Honey', 'Ash brown', 'Copper'],
+    headline: 'Luminous Warmth & Soft Tones',
+    advice: 'Golden honey, soft ash brunette, and delicate copper illuminate your fair complexion with a healthy radiance.',
+  },
+  Medium: {
+    bestColors: ['Chocolate', 'Caramel', 'Auburn'],
+    headline: 'Rich Mocha & Warm Golden Sheen',
+    advice: 'Warm medium skin glows with rich chocolate, sun-kissed caramel highlights, and vibrant auburn accents.',
+  },
+  Deep: {
+    bestColors: ['Burgundy', 'Chocolate', 'Black'],
+    headline: 'Dramatic Royal Contrast',
+    advice: 'Rich burgundy wine, glossy jet black, and dark espresso chocolate create striking, luxurious contrast with your skin.',
+  },
+}
+
+/**
  * Main drawHaircut — draws hairstyle PNG with face-oval protection.
  *
  * KEY TECHNIQUE: "Face Hole" approach

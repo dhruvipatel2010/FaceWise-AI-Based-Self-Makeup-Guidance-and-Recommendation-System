@@ -25,6 +25,34 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
 
   const CONCERNS = ['Hydration & Glow', 'Acne & Blemish', 'Anti-Aging', 'Dark Spots', 'Oil Control']
 
+  function getCustomRoutine(skinType, tone, curConcern) {
+    let actives = 'Vitamin C & Hyaluronic Acid'
+    let am = 'Hydrating Cleanser → Vitamin C Serum → Water Gel Moisturizer → SPF 50'
+    let pm = 'Double Cleanse → Hyaluronic Serum → Ceramide Barrier Cream'
+
+    if (curConcern === 'Acne & Blemish' || skinType?.includes('Oily')) {
+      actives = '2% Salicylic Acid (BHA) & 5% Niacinamide'
+      am = 'Foaming Cleanser → 5% Niacinamide Serum → Oil-Free Mattifying Gel → Non-comedogenic SPF 50'
+      pm = 'Gentle Salicylic Wash → Centella Calming Serum → Lightweight Ceramide Lotion'
+    } else if (curConcern === 'Anti-Aging') {
+      actives = 'Multi-Peptides & Encapsulated Retinol'
+      am = 'Cream Cleanser → Matrixyl Peptide Serum → Rich Firming Cream → Broad Spectrum SPF 50+'
+      pm = 'Oil Cleanser → 0.3% Retinol Elixir → Deep Barrier Night Balm'
+    } else if (curConcern === 'Dark Spots') {
+      actives = 'Alpha Arbutin & 10% Vitamin C'
+      am = 'Brightening Cleanser → 10% Pure Vitamin C → Radiance Cream → Mineral SPF 50'
+      pm = 'Gentle Cleanser → Tranexamic Acid + Arbutin Serum → Nourishing Night Repair'
+    } else if (curConcern === 'Oil Control') {
+      actives = 'Zinc PCA & Green Tea Extract'
+      am = 'Purifying Gel → Zinc PCA Balance Serum → Oil-Control Water Cream → Matte Finish SPF 50'
+      pm = 'Charcoal Detox Wash → BHA Liquid Exfoliant (2x/week) → Soothing Centella Gel'
+    }
+
+    return { actives, am, pm }
+  }
+
+  const customRoutine = getCustomRoutine(skinData?.skinType, skinData?.tone, concern)
+
   async function startCamera() {
     setError('')
     setLoading(true)
@@ -244,10 +272,18 @@ export default function SkincareScanner({ onSkinAnalyzed }) {
           </div>
 
           {/* Routine summary */}
-          <div className='mt-4 rounded-xl border border-plum/10 bg-white p-3 text-xs'>
-            <p className='font-bold text-plum'>☀️ Recommended Routine for your scan:</p>
-            <p className='mt-1 text-plum/70 leading-relaxed'>
-              1. Gentle Cleanser → 2. Vitamin C / Niacinamide Serum → 3. Light Hydrating Moisturizer → 4. Broad Spectrum SPF 50.
+          <div className='mt-4 rounded-xl border border-rose/20 bg-rose/5 p-3.5 text-xs'>
+            <div className='flex items-center justify-between'>
+              <p className='font-bold text-rose'>☀️ AI Targeted Regimen ({concern}):</p>
+              <span className='text-[10px] font-bold text-plum/70 bg-white px-2 py-0.5 rounded-full shadow-xs'>
+                Actives: {customRoutine.actives}
+              </span>
+            </div>
+            <p className='mt-1.5 text-plum/90 leading-relaxed text-[11px]'>
+              <strong>AM:</strong> {customRoutine.am}
+            </p>
+            <p className='mt-1 text-plum/80 leading-relaxed text-[11px]'>
+              <strong>PM:</strong> {customRoutine.pm}
             </p>
           </div>
         </div>
