@@ -37,13 +37,16 @@ export default function App() {
     <Routes>
       {/* ── User panel ──────────────────────────────────── */}
       <Route element={<Layout />}>
-        <Route path='/' element={<Home />} />
+        {/* Public auth pages */}
         <Route path='/login' element={<Login />} />
         <Route path='/register' element={<Register />} />
-        <Route path='/makeup' element={<Makeup />} />
-        <Route path='/skincare' element={<Skincare />} />
-        <Route path='/hairdressing' element={<Hairdressing />} />
-        <Route path='/scan' element={<Scan />} />
+
+        {/* Protected app pages — login required for all */}
+        <Route path='/' element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path='/makeup' element={<ProtectedRoute><Makeup /></ProtectedRoute>} />
+        <Route path='/skincare' element={<ProtectedRoute><Skincare /></ProtectedRoute>} />
+        <Route path='/hairdressing' element={<ProtectedRoute><Hairdressing /></ProtectedRoute>} />
+        <Route path='/scan' element={<ProtectedRoute><Scan /></ProtectedRoute>} />
         <Route path='/dashboard' element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       </Route>
 

@@ -1,8 +1,11 @@
 import { Outlet, Link } from 'react-router-dom'
 import Navbar from './Navbar'
 import AIChatBotPopup from './AIChatBotPopup'
+import { useAuth } from '../services/AuthContext'
 
 export default function Layout() {
+  const { token } = useAuth()
+
   return (
     <div className='min-h-screen flex flex-col justify-between bg-page text-plum'>
       <Navbar />
@@ -12,8 +15,8 @@ export default function Layout() {
         <Outlet />
       </div>
 
-      {/* Floating AI Beauty Advisor Popup (Available in all sections) */}
-      <AIChatBotPopup />
+      {/* Floating AI Beauty Advisor Popup (Available when authenticated) */}
+      {token && <AIChatBotPopup />}
 
       {/* Aesthetic Luxury Beauty Footer */}
       <footer className='border-t border-plum/10 bg-white py-12 mt-16'>

@@ -9,7 +9,7 @@ export default function Navbar() {
 
   function handleLogout() {
     logout()
-    navigate('/')
+    navigate('/login')
   }
 
   const navItem = ({ isActive }) =>
@@ -22,7 +22,7 @@ export default function Navbar() {
     <header className='sticky top-0 z-50 border-b border-plum/10 bg-page/90 backdrop-blur-md'>
       <div className='mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-6 py-4 md:px-12 lg:px-16'>
         {/* Brand Logo */}
-        <Link to='/' className='flex items-center gap-2.5 group'>
+        <Link to={token ? '/' : '/login'} className='flex items-center gap-2.5 group'>
           <div className='flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-rose to-plum text-white shadow-sm transition-transform duration-300 group-hover:scale-105'>
             <span className='font-display text-lg font-bold'>F</span>
           </div>
@@ -34,22 +34,24 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* Navigation links */}
-        <nav className='flex flex-wrap items-center gap-1.5 md:gap-2'>
-          <NavLink to='/' end className={navItem}>Home</NavLink>
-          <NavLink to='/makeup' className={navItem}>💄 Makeup</NavLink>
-          <NavLink to='/skincare' className={navItem}>🧴 Skincare</NavLink>
-          <NavLink to='/hairdressing' className={navItem}>💇 Hairdressing</NavLink>
-          {token && <NavLink to='/dashboard' className={navItem}>Dashboard</NavLink>}
-          {token && role === 'admin' && (
-            <Link
-              to='/admin'
-              className='rounded-full bg-plum px-4 py-2 text-xs font-bold text-white transition hover:bg-plum/90'
-            >
-              Admin Panel ⚡
-            </Link>
-          )}
-        </nav>
+        {/* Navigation links — only visible when logged in */}
+        {token && (
+          <nav className='flex flex-wrap items-center gap-1.5 md:gap-2'>
+            <NavLink to='/' end className={navItem}>Home</NavLink>
+            <NavLink to='/makeup' className={navItem}>💄 Makeup</NavLink>
+            <NavLink to='/skincare' className={navItem}>🧴 Skincare</NavLink>
+            <NavLink to='/hairdressing' className={navItem}>💇 Hairdressing</NavLink>
+            <NavLink to='/dashboard' className={navItem}>Dashboard</NavLink>
+            {role === 'admin' && (
+              <Link
+                to='/admin'
+                className='rounded-full bg-plum px-4 py-2 text-xs font-bold text-white transition hover:bg-plum/90'
+              >
+                Admin Panel ⚡
+              </Link>
+            )}
+          </nav>
+        )}
 
         {/* User Auth Buttons */}
         <div className='flex items-center gap-3'>
